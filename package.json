@@ -1,0 +1,59 @@
+{
+  "name": "opsora",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Opsora enterprise operations management",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "bootstrap:admin": "tsx scripts/bootstrap-admin.ts",
+    "generate:vapid": "tsx scripts/generate-vapid.ts",
+    "validate:env": "tsx scripts/validate-env.ts",
+    "db:types": "supabase gen types typescript --local > src/types/database.generated.ts",
+    "verify": "npm run validate:env && npm run typecheck && npm run lint && npm run build"
+  },
+  "engines": {
+    "node": ">=22 <25"
+  },
+  "dependencies": {
+    "@fontsource/inter": "^5.3.0",
+    "@hookform/resolvers": "latest",
+    "@supabase/ssr": "latest",
+    "@supabase/supabase-js": "latest",
+    "apexcharts": "latest",
+    "bootstrap": "latest",
+    "date-fns": "latest",
+    "date-fns-tz": "latest",
+    "exceljs": "latest",
+    "jose": "latest",
+    "next": "latest",
+    "next-themes": "latest",
+    "nodemailer": "^10.6.1",
+    "pdf-lib": "^1.17.1",
+    "react": "latest",
+    "react-apexcharts": "latest",
+    "react-dom": "latest",
+    "react-hook-form": "latest",
+    "reactstrap": "latest",
+    "remixicon": "latest",
+    "server-only": "latest",
+    "web-push": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/nodemailer": "^8.0.2",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@types/web-push": "latest",
+    "eslint": "latest",
+    "eslint-config-next": "latest",
+    "sass": "latest",
+    "supabase": "latest",
+    "tsx": "latest",
+    "typescript": "latest"
+  }
+}

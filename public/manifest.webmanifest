@@ -1,0 +1,10 @@
+{
+  "name": "Opsora",
+  "short_name": "Opsora",
+  "description": "Assign. Execute. Verify. Track.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#f6f6fb",
+  "theme_color": "#181a2b",
+  "icons": [{ "src": "/opsora-logo.png", "sizes": "any", "purpose": "any" }]
+}
