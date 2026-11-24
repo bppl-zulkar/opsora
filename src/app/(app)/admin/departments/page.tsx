@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireOrganizationAdmin } from "@/lib/admin-context";
 import { createDepartment, deleteDepartment } from "./actions";
+import { FormSubmitButton } from "@/components/form-submit-button";
 export default async function Departments({
   searchParams,
 }: {
@@ -81,7 +82,9 @@ export default async function Departments({
             <input name="office_location" className="form-control" />
           </div>
           <div className="col-12">
-            <button className="btn btn-primary">Create department</button>
+            <FormSubmitButton pendingLabel="Creating department…">
+              Create department
+            </FormSubmitButton>
           </div>
         </form>
       </details>
@@ -121,9 +124,12 @@ export default async function Departments({
                     </Link>
                     <form action={deleteDepartment}>
                       <input type="hidden" name="id" value={d.id} />
-                      <button className="btn btn-sm btn-outline-danger">
+                      <FormSubmitButton
+                        className="btn btn-sm btn-outline-danger"
+                        pendingLabel="Deleting…"
+                      >
                         Delete
-                      </button>
+                      </FormSubmitButton>
                     </form>
                   </div>
                 </td>

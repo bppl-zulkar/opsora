@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { saveCommunicationSettings } from "./actions";
 import { PasswordInput } from "@/components/password-input";
+import { FormSubmitButton } from "@/components/form-submit-button";
 export default async function Configuration({
   searchParams,
 }: {
@@ -216,9 +217,9 @@ export default async function Configuration({
             </div>
           </div>
         </section>
-        <button className="btn btn-primary">
+        <FormSubmitButton pendingLabel="Saving configuration…">
           Save encrypted configuration
-        </button>
+        </FormSubmitButton>
       </form>
     </main>
   );

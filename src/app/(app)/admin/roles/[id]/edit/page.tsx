@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireOrganizationAdmin } from "@/lib/admin-context";
 import { updateRole } from "../../actions";
+import { FormSubmitButton } from "@/components/form-submit-button";
 export default async function EditRole({
   params,
 }: {
@@ -76,7 +77,12 @@ export default async function EditRole({
             </div>
           ))}
         </div>
-        <button className="btn btn-primary mt-3">Save permission matrix</button>
+        <FormSubmitButton
+          className="btn btn-primary mt-3"
+          pendingLabel="Saving permissions…"
+        >
+          Save permission matrix
+        </FormSubmitButton>
       </form>
     </main>
   );

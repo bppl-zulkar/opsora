@@ -451,100 +451,196 @@ export async function individualTaskPdf(
   const pdf = await PDFDocument.create(),
     regular = await pdf.embedFont(StandardFonts.Helvetica),
     bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  let page = pdf.addPage([595.28, 841.89]),
-    y = 790,
+  const pageSize: [number, number] = [595.28, 841.89];
+  const left = 38,
+    contentWidth = 519,
+    labelX = 46,
+    valueX = 164,
+    valueWidth = 381,
+    pageBottom = 48;
+  const ink = rgb(0.12, 0.14, 0.22),
+    muted = rgb(0.38, 0.41, 0.51),
+    navy = rgb(0.07, 0.1, 0.24),
+    accent = rgb(0.25, 0.42, 0.95);
+  let page = pdf.addPage(pageSize),
+    y = 740,
     rowIndex = 0;
-  const line = (label: string, value: unknown) => {
-    const text = String(value ?? "—");
-    const parts = text.match(/.{1,75}(?:\s|$)/g) ?? [text];
-    const rowHeight = Math.max(20, parts.length * 12 + 6);
-    if (y - rowHeight < 48) {
-      page = pdf.addPage([595.28, 841.89]);
-      page.drawRectangle({
-        x: 0,
-        y: 818,
-        width: 595.28,
-        height: 23.89,
-        color: rgb(0.07, 0.1, 0.24),
-      });
-      page.drawText("Opsora · Task lifecycle report", {
-        x: 38,
-        y: 826,
-        size: 8,
-        font: bold,
-        color: rgb(1, 1, 1),
-      });
-      y = 790;
+
+  const pdfText = (value: unknown) =>
+    String(value ?? "—")
+      .replaceAll("—", "-")
+      .replaceAll("–", "-")
+      .replaceAll("→", "->")
+      .replaceAll("·", "|")
+      .normalize("NFKD")
+      .replace(/\p{M}/gu, "")
+      .replace(/[^\x20-\x7e\n]/g, "?");
+  const wrap = (value: unknown, font: typeof regular, size: number, width: number) => {
+    const lines: string[] = [];
+    for (const paragraph of pdfText(value).split(/\r?\n/)) {
+      let line = "";
+      for (const word of paragraph.split(/\s+/).filter(Boolean)) {
+        const candidate = line ? `${line} ${word}` : word;
+        if (font.widthOfTextAtSize(candidate, size) <= width) {
+          line = candidate;
+          continue;
+        }
+        if (line) lines.push(line);
+        line = "";
+        for (const character of word) {
+          const next = line + character;
+          if (font.widthOfTextAtSize(next, size) > width && line) {
+            lines.push(line);
+            line = character;
+          } else {
+            line = next;
+          }
+        }
+      }
+      lines.push(line || " ");
     }
+    return lines;
+  };
+  const drawPageHeader = (firstPage: boolean) => {
     page.drawRectangle({
-      x: 32,
-      y: y - rowHeight + 7,
-      width: 531,
-      height: rowHeight,
-      color: rowIndex % 2 === 0 ? rgb(0.965, 0.972, 0.995) : rgb(0.99, 0.99, 1),
-      borderColor: rgb(0.9, 0.91, 0.95),
-      borderWidth: 0.35,
+      x: 0,
+      y: 759,
+      width: pageSize[0],
+      height: 82.89,
+      color: navy,
     });
-    page.drawText(label, {
-      x: 40,
-      y,
+    page.drawCircle({
+      x: 552,
+      y: 822,
+      size: 70,
+      color: accent,
+      opacity: 0.22,
+    });
+    page.drawText("Opsora", {
+      x: left,
+      y: 810,
+      size: 21,
+      font: bold,
+      color: rgb(1, 1, 1),
+    });
+    page.drawText(firstPage ? "Individual task report" : "Task report - continued", {
+      x: left,
+      y: 783,
+      size: 12,
+      font: bold,
+      color: rgb(0.62, 0.75, 1),
+    });
+    page.drawText(pdfText(task.reference), {
+      x: 365,
+      y: 811,
       size: 8,
       font: bold,
-      color: rgb(0.34, 0.37, 0.48),
+      color: rgb(0.9, 0.92, 0.98),
     });
-    parts.forEach((part, index) =>
-      page.drawText(part.trim(), {
-        x: index ? 165 : 165,
-        y: y - index * 12,
-        size: 8,
-        font: regular,
-        color: rgb(0.12, 0.13, 0.2),
-      }),
-    );
-    y -= rowHeight;
-    rowIndex += 1;
+    page.drawText(`Generated ${pdfText(formatIST(new Date()))}`, {
+      x: 365,
+      y: 791,
+      size: 7,
+      font: regular,
+      color: rgb(0.78, 0.82, 0.92),
+    });
+    y = 740;
   };
-  page.drawRectangle({
-    x: 0,
-    y: 735,
-    width: 595.28,
-    height: 106.89,
-    color: rgb(0.07, 0.1, 0.24),
-  });
-  page.drawCircle({
-    x: 545,
-    y: 812,
-    size: 70,
-    color: rgb(0.25, 0.35, 0.95),
-    opacity: 0.22,
-  });
-  page.drawText("Opsora", {
-    x: 38,
-    y,
-    size: 22,
-    font: bold,
-    color: rgb(1, 1, 1),
-  });
-  y -= 26;
-  page.drawText("Individual task lifecycle report", {
-    x: 38,
-    y,
-    size: 13,
-    font: bold,
-    color: rgb(0.39, 0.64, 1),
-  });
-  y -= 30;
-  line("Task reference", task.reference);
-  line("Title", task.title);
-  line("Instructions", task.description);
-  line("Status", String(task.status).replaceAll("_", " "));
-  line("Priority", task.priority);
-  line("Created by", person(task.creator));
-  line("Assigned to", person(task.owner));
-  line("Department", task.department?.name);
+  const addPage = () => {
+    page = pdf.addPage(pageSize);
+    drawPageHeader(false);
+  };
+  const ensureSpace = (height: number) => {
+    if (y - height < pageBottom) addPage();
+  };
+  const drawSection = (title: string) => {
+    ensureSpace(34);
+    page.drawRectangle({
+      x: left,
+      y: y - 7,
+      width: contentWidth,
+      height: 25,
+      color: rgb(0.92, 0.94, 0.99),
+    });
+    page.drawRectangle({
+      x: left,
+      y: y - 7,
+      width: 3,
+      height: 25,
+      color: accent,
+    });
+    page.drawText(pdfText(title), {
+      x: left + 11,
+      y,
+      size: 10,
+      font: bold,
+      color: navy,
+    });
+    y -= 34;
+  };
+  const drawRow = (label: string, value: unknown) => {
+    const lines = wrap(value, regular, 8, valueWidth);
+    let offset = 0;
+    while (offset < lines.length) {
+      let available = Math.floor((y - pageBottom - 8) / 12);
+      if (available < 1) {
+        addPage();
+        available = 55;
+      }
+      available = Math.min(55, available);
+      const chunk = lines.slice(offset, offset + available);
+      const rowHeight = chunk.length * 12 + 8;
+      page.drawRectangle({
+        x: left,
+        y: y - rowHeight + 7,
+        width: contentWidth,
+        height: rowHeight,
+        color:
+          rowIndex % 2 === 0 ? rgb(0.97, 0.975, 0.99) : rgb(0.99, 0.99, 1),
+        borderColor: rgb(0.9, 0.91, 0.95),
+        borderWidth: 0.35,
+      });
+      page.drawText(
+        pdfText(offset ? `${label} (cont.)` : label),
+        {
+          x: labelX,
+          y,
+          size: 8,
+          font: bold,
+          color: muted,
+        },
+      );
+      chunk.forEach((part, index) =>
+        page.drawText(part, {
+          x: valueX,
+          y: y - index * 12,
+          size: 8,
+          font: regular,
+          color: ink,
+        }),
+      );
+      y -= rowHeight;
+      rowIndex += 1;
+      offset += chunk.length;
+      if (offset < lines.length) addPage();
+    }
+  };
+
+  drawPageHeader(true);
+  drawSection("Task overview");
+  drawRow("Task reference", task.reference);
+  drawRow("Title", task.title);
+  drawRow("Instructions", task.description);
+  drawRow("Status", String(task.status ?? "—").replaceAll("_", " "));
+  drawRow("Priority", task.priority);
+  drawRow("Progress", `${task.progress_percentage ?? 0}%`);
+  drawRow("Created by", person(task.creator));
+  drawRow("Assigned to", person(task.owner));
+  drawRow("Department", task.department?.name);
   for (const [label, key] of [
     ["Created", "created_at"],
-    ["Deadline", "current_deadline"],
+    ["Original deadline", "original_deadline"],
+    ["Current deadline", "current_deadline"],
     ["Acknowledged", "acknowledged_at"],
     ["Accepted", "accepted_at"],
     ["Started", "started_at"],
@@ -552,59 +648,127 @@ export async function individualTaskPdf(
     ["Approved", "approved_at"],
     ["Closed", "closed_at"],
   ] as const)
-    line(label, task[key] ? formatIST(task[key]) : "—");
-  y -= 8;
-  page.drawText("Lifecycle history", {
-    x: 38,
-    y,
-    size: 12,
-    font: bold,
-    color: rgb(0.1, 0.1, 0.17),
-  });
-  y -= 22;
+    drawRow(label, task[key] ? formatIST(task[key]) : "—");
+  drawRow("Completion remarks", task.completion_remarks);
+
+  drawSection("Lifecycle history");
+  if (!history.length) drawRow("History", "No lifecycle events recorded.");
   for (const event of history)
-    line(
+    drawRow(
       formatIST(event.created_at),
       `${event.actor?.full_name ?? "System"}: ${event.previous_status ?? "created"} -> ${event.new_status}${event.remarks ? ` | ${event.remarks}` : ""}`,
     );
-  y -= 8;
-  page.drawText("Evidence and attachments", {
-    x: 38,
-    y,
-    size: 12,
-    font: bold,
-    color: rgb(0.1, 0.1, 0.17),
-  });
-  y -= 22;
+
+  drawSection("Evidence and attachments");
+  if (!attachments.length)
+    drawRow("Evidence", "No evidence metadata recorded.");
   for (const item of attachments)
-    line(
+    drawRow(
       item.evidence_type ?? "Attachment",
-      `${item.file_name} | ${item.mime_type} | ${item.file_size} bytes | ${formatIST(item.created_at)}${item.remarks ? ` | ${item.remarks}` : ""}`,
+      [
+        item.file_name ?? "Unnamed file",
+        item.mime_type ?? "Unknown type",
+        `${item.file_size ?? "Unknown"} bytes`,
+        item.created_at ? formatIST(item.created_at) : "Date unavailable",
+        item.remarks ? `Remarks: ${item.remarks}` : "",
+      ]
+        .filter(Boolean)
+        .join(" | "),
     );
-  if (!attachments.length) line("Evidence", "No evidence metadata recorded");
-  y -= 8;
-  page.drawText("Comments and remarks", {
-    x: 38,
-    y,
-    size: 12,
-    font: bold,
-    color: rgb(0.1, 0.1, 0.17),
+
+  drawSection("Uploaded photos");
+  const photoExtensions = new Set([
+    "jpg",
+    "jpeg",
+    "png",
+    "gif",
+    "webp",
+    "avif",
+    "bmp",
+    "tif",
+    "tiff",
+    "svg",
+    "heic",
+    "heif",
+  ]);
+  const photos = attachments.filter((item) => {
+    const mimeType = String(item.mime_type ?? "")
+      .split(";")[0]
+      .trim()
+      .toLowerCase();
+    const extension = String(item.file_name ?? "")
+      .match(/\.([^.]+)$/)?.[1]
+      ?.toLowerCase();
+    return mimeType.startsWith("image/") || photoExtensions.has(extension ?? "");
   });
-  y -= 22;
+  if (!photos.length) drawRow("Photos", "No photo files attached.");
+  for (const item of photos) {
+    ensureSpace(300);
+    drawRow("File", item.file_name ?? "Unnamed photo");
+    drawRow("Uploaded", item.created_at ? formatIST(item.created_at) : "Date unavailable");
+    drawRow("Format", item.mime_type ?? "Unknown image format");
+    drawRow("File size", `${item.file_size ?? "Unknown"} bytes`);
+    if (item.remarks) drawRow("Remarks", item.remarks);
+
+    let image;
+    let failure = item.photoError as string | undefined;
+    const bytes = item.photoBytes as Uint8Array | undefined;
+    const photoFormat = String(item.photoFormat ?? "").toLowerCase();
+    if (!failure && bytes?.length) {
+      try {
+        if (photoFormat === "image/png") image = await pdf.embedPng(bytes);
+        else if (photoFormat === "image/jpeg") image = await pdf.embedJpg(bytes);
+        else failure = "Photo was not converted to a PDF-compatible JPEG or PNG.";
+      } catch {
+        failure = "Image embedding failed after conversion to JPEG or PNG.";
+      }
+    } else if (!failure) {
+      failure = "Photo data is unavailable for this report.";
+    }
+
+    if (image) {
+      drawRow("PDF format", photoFormat.replace("image/", "").toUpperCase());
+      const boxWidth = contentWidth - 24;
+      const boxHeight = 220;
+      ensureSpace(boxHeight + 18);
+      page.drawRectangle({
+        x: left + 12,
+        y: y - boxHeight + 5,
+        width: boxWidth,
+        height: boxHeight,
+        color: rgb(0.975, 0.98, 0.995),
+        borderColor: rgb(0.88, 0.9, 0.94),
+        borderWidth: 0.7,
+      });
+      const fitted = image.scaleToFit(boxWidth - 16, boxHeight - 16);
+      page.drawImage(image, {
+        x: left + 12 + (boxWidth - fitted.width) / 2,
+        y: y - boxHeight + 5 + (boxHeight - fitted.height) / 2,
+        width: fitted.width,
+        height: fitted.height,
+      });
+      y -= boxHeight + 14;
+    } else {
+      drawRow("Photo status", failure);
+    }
+  }
+
+  drawSection("Comments and remarks");
+  if (!comments.length) drawRow("Comments", "No comments recorded.");
   for (const comment of comments)
-    line(
+    drawRow(
       formatIST(comment.created_at),
       `${comment.author?.full_name ?? "System"}: ${comment.body}`,
     );
-  if (!comments.length) line("Comments", "No comments recorded");
+
   const pages = pdf.getPages();
   pages.forEach((p, i) =>
-    p.drawText(`Opsora | Page ${i + 1} of ${pages.length}`, {
-      x: 38,
-      y: 22,
+    p.drawText(`OPSORA  |  PAGE ${i + 1} OF ${pages.length}`, {
+      x: left,
+      y: 24,
       size: 7,
       font: regular,
-      color: rgb(0.45, 0.47, 0.55),
+      color: muted,
     }),
   );
   return Buffer.from(await pdf.save());

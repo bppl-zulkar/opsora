@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { createOrganization } from "./actions";
+import { FormSubmitButton } from "@/components/form-submit-button";
 export default async function Organizations({
   searchParams,
 }: {
@@ -60,7 +61,9 @@ export default async function Organizations({
             />
           </div>
           <div className="col-12">
-            <button className="btn btn-primary">Create organization</button>
+            <FormSubmitButton pendingLabel="Creating organization…">
+              Create organization
+            </FormSubmitButton>
           </div>
         </div>
       </form>

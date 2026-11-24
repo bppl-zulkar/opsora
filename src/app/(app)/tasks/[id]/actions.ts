@@ -15,7 +15,7 @@ export async function transitionTask(fd: FormData) {
         "approve",
       ])
       .parse(fd.get("action")),
-    discussion = z.string().trim().min(3).max(2000).parse(fd.get("discussion"));
+    remarks = z.string().trim().min(3).max(2000).parse(fd.get("remarks"));
   const s = await createClient();
   const {
     data: { user },
@@ -23,7 +23,7 @@ export async function transitionTask(fd: FormData) {
   if (!user) throw new Error("Authentication required");
   const { data: task } = await s
     .from("tasks")
-    .select("status,created_by,primary_owner_id,approver_id")
+    .select("title,status,created_by,primary_owner_id,approver_id")
     .eq("id", id)
     .single();
   if (!task) throw new Error("Task is unavailable");
@@ -60,7 +60,7 @@ export async function transitionTask(fd: FormData) {
     const { error } = await s.rpc("transition_task", {
       p_task_id: id,
       p_new_status: status,
-      p_remarks: index === transitions.length - 1 ? discussion : null,
+      p_remarks: index === transitions.length - 1 ? remarks : null,
     });
     if (error) throw new Error(error.message);
   }
@@ -77,35 +77,10 @@ export async function transitionTask(fd: FormData) {
   await dispatchTaskEvent(
     id,
     user.id,
-    "Work update recorded",
-    `Task status changed to ${visibleStatus}. Update: ${discussion}`,
-  ).catch(console.error);
-  revalidatePath(`/tasks/${id}`);
-}
-export async function addComment(fd: FormData) {
-  const id = z.string().uuid().parse(fd.get("id")),
-    body = z.string().trim().min(3).max(5000).parse(fd.get("body"));
-  const s = await createClient();
-  const {
-    data: { user },
-  } = await s.auth.getUser();
-  const { data: p } = await s
-    .from("profiles")
-    .select("organization_id")
-    .eq("id", user!.id)
-    .single();
-  const { error } = await s.from("task_comments").insert({
-    organization_id: p!.organization_id,
-    task_id: id,
-    author_id: user!.id,
-    body,
-  });
-  if (error) throw new Error(error.message);
-  await dispatchTaskEvent(
-    id,
-    user!.id,
-    "New task comment",
-    `${p ? "A team member" : "A user"} added a comment: ${body.slice(0, 180)}`,
+    action === "complete" ? "Task completed" : "Work update recorded",
+    action === "complete"
+      ? `"${task.title}" is complete and ready for verification. Remarks: ${remarks}`
+      : `Task status changed to ${visibleStatus}. Remarks: ${remarks}`,
   ).catch(console.error);
   revalidatePath(`/tasks/${id}`);
 }

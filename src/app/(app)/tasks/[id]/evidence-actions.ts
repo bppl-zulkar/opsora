@@ -12,13 +12,6 @@ const requestSchema = z.object({
     .int()
     .positive()
     .max(50 * 1024 * 1024),
-  evidenceType: z.enum([
-    "before",
-    "progress",
-    "after",
-    "completion",
-    "supporting",
-  ]),
   remarks: z.string().trim().min(3).max(500),
 });
 
@@ -78,7 +71,7 @@ export async function finalizeEvidenceUpload(
     file_name: value.fileName,
     mime_type: value.mimeType,
     file_size: value.fileSize,
-    evidence_type: value.evidenceType,
+    evidence_type: "supporting",
     checksum: value.checksum,
     remarks: value.remarks,
     capture_time: new Date().toISOString(),

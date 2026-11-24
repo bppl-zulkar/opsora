@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { updateProfile } from "./actions";
 import { formatIST } from "@/lib/format";
+import { FormSubmitButton } from "@/components/form-submit-button";
 
 export default async function Profile({
   searchParams,
@@ -74,7 +75,9 @@ export default async function Profile({
               />
             </div>
             <div className="col-12 d-flex gap-2">
-              <button className="btn btn-primary">Save profile</button>
+              <FormSubmitButton pendingLabel="Saving profile…">
+                Save profile
+              </FormSubmitButton>
               <Link href="/profile" className="btn btn-outline-secondary">
                 Cancel
               </Link>

@@ -1,5 +1,6 @@
 import { createTask } from "./actions";
 import { createClient } from "@/lib/supabase/server";
+import { FormSubmitButton } from "@/components/form-submit-button";
 export default async function NewTask() {
   const s = await createClient();
   const { data } = await s
@@ -107,7 +108,9 @@ export default async function NewTask() {
             </label>
           </div>
           <div className="col-12">
-            <button className="btn btn-primary">Assign task</button>
+            <FormSubmitButton pendingLabel="Assigning task…">
+              Assign task
+            </FormSubmitButton>
           </div>
         </div>
       </form>

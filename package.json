@@ -40,6 +40,7 @@
     "reactstrap": "latest",
     "remixicon": "latest",
     "server-only": "latest",
+    "sharp": "^0.35.5",
     "web-push": "latest",
     "zod": "latest"
   },

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requireOrganizationAdmin } from "@/lib/admin-context";
 import { PasswordInput } from "@/components/password-input";
 import { updateEmployee } from "../../actions";
+import { FormSubmitButton } from "@/components/form-submit-button";
 export default async function EditUser({
   params,
 }: {
@@ -182,7 +183,9 @@ export default async function EditUser({
           </select>
         </div>
         <div className="col-12">
-          <button className="btn btn-primary">Save company user</button>
+          <FormSubmitButton pendingLabel="Saving user…">
+            Save company user
+          </FormSubmitButton>
         </div>
       </form>
     </main>

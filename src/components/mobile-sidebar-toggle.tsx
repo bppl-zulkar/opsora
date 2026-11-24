@@ -1,14 +1,19 @@
 "use client";
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 export function MobileSidebarToggle() {
-  const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+  const [openPath, setOpenPath] = useState<string | null>(null);
+  const open = openPath === pathname;
   return (
     <>
       <button
         type="button"
         className="mobile-menu-button"
-        onClick={() => setOpen(true)}
-        aria-label="Open navigation"
+        onClick={() => setOpenPath(open ? null : pathname)}
+        aria-label={open ? "Close navigation" : "Open navigation"}
+        aria-expanded={open}
+        aria-controls="primary-sidebar"
       >
         <i className="ri-menu-2-line" />
       </button>
@@ -17,7 +22,7 @@ export function MobileSidebarToggle() {
           type="button"
           className="sidebar-backdrop"
           aria-label="Close navigation"
-          onClick={() => setOpen(false)}
+          onClick={() => setOpenPath(null)}
         />
       )}
       <style>{open ? ".sidebar{transform:translateX(0)!important}" : ""}</style>

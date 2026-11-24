@@ -1,7 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { formatIST, formatWorkStatus } from "@/lib/format";
-import { transitionTask, addComment } from "./actions";
-import { EvidenceUploader } from "@/components/evidence-uploader";
+import { TaskUpdateForm } from "@/components/task-update-form";
 import { getTaskAccess, ownTaskFilter } from "@/lib/task-access";
 export default async function Task({
   params,
@@ -30,17 +29,11 @@ export default async function Task({
     .select("*,actor:profiles(full_name)")
     .eq("task_id", id)
     .order("created_at", { ascending: false });
-  const { data: commentsData } = await s
-    .from("task_comments")
-    .select("*,author:profiles(full_name)")
-    .eq("task_id", id)
-    .order("created_at");
   const history = historyData ?? [];
-  const comments = commentsData ?? [];
   const { data: attachmentData } = await s
     .from("task_attachments")
     .select(
-      "id,file_name,mime_type,file_size,evidence_type,remarks,storage_path,created_at",
+      "id,file_name,mime_type,file_size,remarks,storage_path,created_at",
     )
     .eq("task_id", id)
     .order("created_at", { ascending: false });
@@ -97,51 +90,10 @@ export default async function Task({
       <div className="row g-3">
         <div className="col-lg-8">
           {nextActions.length > 0 && (
-            <form
-              action={transitionTask}
-              className="panel p-4 mb-3 work-update-form"
-            >
-              <h2 className="h5">Record work update</h2>
-              <p className="text-secondary small">
-                Choose the next status and enter a compulsory discussion note.
-                This update becomes part of the permanent task timeline.
-              </p>
-              <input type="hidden" name="id" value={id} />
-              <div className="row g-2">
-                <div className="col-md-4">
-                  <label className="form-label">Next status</label>
-                  <select name="action" className="form-select" required>
-                    {nextActions.map(([action, label]) => (
-                      <option value={action} key={action}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-md-8">
-                  <label className="form-label">
-                    Discussion / work update{" "}
-                    <span className="text-danger">*</span>
-                  </label>
-                  <textarea
-                    name="discussion"
-                    className="form-control"
-                    rows={3}
-                    minLength={3}
-                    maxLength={2000}
-                    placeholder="Describe the work completed, progress, reason for hold, or approval decision"
-                    required
-                  />
-                </div>
-                <div className="col-12">
-                  <button className="btn btn-primary">Save work update</button>
-                </div>
-              </div>
-            </form>
+            <TaskUpdateForm taskId={id} nextActions={nextActions} />
           )}
-          <EvidenceUploader taskId={id} />
           <section className="panel p-4 mb-3">
-            <h2 className="h5">Evidence</h2>
+            <h2 className="h5">Uploaded files and photos</h2>
             {attachments.map((a) => (
               <div
                 className="d-flex justify-content-between border-bottom py-2"
@@ -150,8 +102,8 @@ export default async function Task({
                 <div>
                   <strong>{a.file_name}</strong>
                   <small className="d-block text-secondary">
-                    {a.evidence_type} · {(a.file_size / 1024 / 1024).toFixed(2)}{" "}
-                    MB {a.remarks && `· ${a.remarks}`}
+                    {(a.file_size / 1024 / 1024).toFixed(2)} MB
+                    {a.remarks && ` · ${a.remarks}`}
                   </small>
                 </div>
                 {a.signedUrl && (
@@ -167,7 +119,7 @@ export default async function Task({
               </div>
             ))}
             {!attachments.length && (
-              <p className="text-secondary mb-0">No evidence uploaded yet.</p>
+              <p className="text-secondary mb-0">No files or photos uploaded yet.</p>
             )}
           </section>
           <section className="panel p-4 mb-3">
@@ -190,36 +142,6 @@ export default async function Task({
               </div>
             </div>
           </section>
-          <section className="panel p-4">
-            <h2 className="h5">Discussion</h2>
-            {comments.map((c) => (
-              <div className="border-bottom py-3" key={c.id}>
-                <strong>{c.author?.full_name}</strong>
-                <small className="text-secondary ms-2">
-                  {formatIST(c.created_at)}
-                </small>
-                <div>{c.body}</div>
-              </div>
-            ))}
-            <form action={addComment} className="mt-3">
-              <input type="hidden" name="id" value={id} />
-              <label className="form-label">
-                Discussion note <span className="text-danger">*</span>
-              </label>
-              <textarea
-                className="form-control"
-                name="body"
-                rows={3}
-                placeholder="Add a progress update or remark"
-                minLength={3}
-                maxLength={5000}
-                required
-              />
-              <button className="btn btn-outline-primary mt-2">
-                Add comment
-              </button>
-            </form>
-          </section>
         </div>
         <div className="col-lg-4">
           <section className="panel p-4 mb-3">
@@ -229,7 +151,7 @@ export default async function Task({
               <dd>{t.priority}</dd>
               <dt>Deadline</dt>
               <dd>{formatIST(t.current_deadline)}</dd>
-              <dt>Evidence</dt>
+              <dt>Upload requirement</dt>
               <dd>{t.evidence_required ? "Required" : "Optional"}</dd>
               <dt>Progress</dt>
               <dd>{t.progress_percentage}%</dd>

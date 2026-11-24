@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireOrganizationAdmin } from "@/lib/admin-context";
 import { createRole, deleteRole } from "./actions";
+import { FormSubmitButton } from "@/components/form-submit-button";
 export default async function Roles({
   searchParams,
 }: {
@@ -33,7 +34,12 @@ export default async function Roles({
           <input name="description" className="form-control" />
         </div>
         <div className="col-md-2 d-flex align-items-end">
-          <button className="btn btn-primary w-100">Create role</button>
+          <FormSubmitButton
+            className="btn btn-primary w-100"
+            pendingLabel="Creating role…"
+          >
+            Create role
+          </FormSubmitButton>
         </div>
       </form>
       <div className="panel table-responsive">
@@ -70,9 +76,12 @@ export default async function Roles({
                     {!r.system_key && (
                       <form action={deleteRole}>
                         <input type="hidden" name="id" value={r.id} />
-                        <button className="btn btn-sm btn-outline-danger">
+                        <FormSubmitButton
+                          className="btn btn-sm btn-outline-danger"
+                          pendingLabel="Deleting…"
+                        >
                           Delete
-                        </button>
+                        </FormSubmitButton>
                       </form>
                     )}
                   </div>

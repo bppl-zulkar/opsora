@@ -3,6 +3,7 @@ import { Logo } from "@/components/logo";
 import Link from "next/link";
 import { PasswordInput } from "@/components/password-input";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { FormSubmitButton } from "@/components/form-submit-button";
 export default async function Login({
   searchParams,
 }: {
@@ -78,9 +79,12 @@ export default async function Login({
                 required
               />
             </div>
-            <button className="btn btn-primary btn-lg w-100" type="submit">
+            <FormSubmitButton
+              className="btn btn-primary btn-lg w-100"
+              pendingLabel="Signing in…"
+            >
               Sign in securely
-            </button>
+            </FormSubmitButton>
           </form>
           <p className="text-secondary small text-center mt-4">
             Access is invitation-only. Contact your company administrator.

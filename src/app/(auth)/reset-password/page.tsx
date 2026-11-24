@@ -1,5 +1,6 @@
 import { updatePassword } from "./actions";
 import { PasswordInput } from "@/components/password-input";
+import { FormSubmitButton } from "@/components/form-submit-button";
 export default async function ResetPassword({
   searchParams,
 }: {
@@ -31,9 +32,12 @@ export default async function ResetPassword({
             className="form-control form-control-lg mb-3"
             required
           />
-          <button className="btn btn-primary btn-lg w-100">
+          <FormSubmitButton
+            className="btn btn-primary btn-lg w-100"
+            pendingLabel="Updating password…"
+          >
             Update password
-          </button>
+          </FormSubmitButton>
         </form>
       </section>
     </main>

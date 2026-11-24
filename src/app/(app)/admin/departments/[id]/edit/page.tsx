@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireOrganizationAdmin } from "@/lib/admin-context";
 import { updateDepartment } from "../../actions";
+import { FormSubmitButton } from "@/components/form-submit-button";
 export default async function EditDepartment({
   params,
 }: {
@@ -111,7 +112,9 @@ export default async function EditDepartment({
           </div>
         </div>
         <div className="col-12">
-          <button className="btn btn-primary">Save department</button>
+          <FormSubmitButton pendingLabel="Saving department…">
+            Save department
+          </FormSubmitButton>
         </div>
       </form>
     </main>

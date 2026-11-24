@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireOrganizationAdmin } from "@/lib/admin-context";
 import { updateSla } from "../../actions";
+import { FormSubmitButton } from "@/components/form-submit-button";
 export default async function EditSla({
   params,
 }: {
@@ -102,7 +103,9 @@ export default async function EditSla({
           </div>
         ))}
         <div className="col-12">
-          <button className="btn btn-primary">Save SLA policy</button>
+          <FormSubmitButton pendingLabel="Saving policy…">
+            Save SLA policy
+          </FormSubmitButton>
         </div>
       </form>
     </main>

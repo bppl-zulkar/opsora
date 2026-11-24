@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requestReset } from "./actions";
+import { FormSubmitButton } from "@/components/form-submit-button";
 export default async function ForgotPassword({
   searchParams,
 }: {
@@ -37,9 +38,12 @@ export default async function ForgotPassword({
               className="form-control form-control-lg mb-3"
               required
             />
-            <button className="btn btn-primary btn-lg w-100">
+            <FormSubmitButton
+              className="btn btn-primary btn-lg w-100"
+              pendingLabel="Sending reset link…"
+            >
               Send reset link
-            </button>
+            </FormSubmitButton>
           </form>
           <Link className="d-block text-center mt-3" href="/login">
             Return to sign in

@@ -8,6 +8,8 @@ import "@fontsource/inter/700.css";
 import "./globals.scss";
 import { PwaRegister } from "@/components/pwa-register";
 import { PermissionGate } from "@/components/permission-gate";
+import { PushSound } from "@/components/push-sound";
+import { InteractionLock } from "@/components/interaction-lock";
 export const metadata: Metadata = {
   title: { default: "Opsora", template: "%s | Opsora" },
   description: "Opsora — Assign. Execute. Verify. Track.",
@@ -23,9 +25,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <PwaRegister />
-        <PermissionGate />
-        {children}
+        <InteractionLock>
+          <PwaRegister />
+          <PermissionGate />
+          <PushSound />
+          {children}
+        </InteractionLock>
       </body>
     </html>
   );

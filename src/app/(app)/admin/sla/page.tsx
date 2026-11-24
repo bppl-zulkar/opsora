@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireOrganizationAdmin } from "@/lib/admin-context";
 import { createSla, deleteSla } from "./actions";
+import { FormSubmitButton } from "@/components/form-submit-button";
 export default async function Sla({
   searchParams,
 }: {
@@ -101,7 +102,9 @@ export default async function Sla({
           ))}
           <input type="hidden" name="active" value="on" />
           <div className="col-12">
-            <button className="btn btn-primary">Create policy</button>
+            <FormSubmitButton pendingLabel="Creating policy…">
+              Create policy
+            </FormSubmitButton>
           </div>
         </form>
       </details>
@@ -138,9 +141,12 @@ export default async function Sla({
                 </Link>
                 <form action={deleteSla}>
                   <input type="hidden" name="id" value={p.id} />
-                  <button className="btn btn-sm btn-outline-danger">
+                  <FormSubmitButton
+                    className="btn btn-sm btn-outline-danger"
+                    pendingLabel="Removing…"
+                  >
                     {p.active ? "Delete" : "Remove"}
-                  </button>
+                  </FormSubmitButton>
                 </form>
               </div>
             </section>

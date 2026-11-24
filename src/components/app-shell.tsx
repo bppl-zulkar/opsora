@@ -82,17 +82,19 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
   } as React.CSSProperties;
   return (
     <div className="shell" style={style}>
-      <aside className="sidebar">
+      <aside className="sidebar" id="primary-sidebar">
         <Logo src={sidebarLogo} name={companyName} />
         <div className="nav-section">Workspace</div>
-        {nav
-          .filter(([href]) => href !== "/admin" || isAdmin)
-          .map(([href, icon, label]) => (
-            <Link className="side-link" href={href} key={href}>
-              <i className={icon} />
-              <span>{label}</span>
-            </Link>
-          ))}
+        <nav aria-label="Workspace navigation">
+          {nav
+            .filter(([href]) => href !== "/admin" || isAdmin)
+            .map(([href, icon, label]) => (
+              <Link className="side-link" href={href} key={href}>
+                <i className={icon} aria-hidden="true" />
+                <span>{label}</span>
+              </Link>
+            ))}
+        </nav>
       </aside>
       <div className="main">
         <header className="topbar">
@@ -114,7 +116,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
         {children}
-        <nav className="mobile-bottom-nav">
+        <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
           <Link href="/dashboard">
             <i className="ri-dashboard-2-line" />
             <span>Home</span>

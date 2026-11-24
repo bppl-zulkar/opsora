@@ -1,5 +1,6 @@
 import { changePassword } from "./actions";
 import { PasswordInput } from "@/components/password-input";
+import { FormSubmitButton } from "@/components/form-submit-button";
 export default function ChangePassword() {
   return (
     <main className="page">
@@ -25,7 +26,9 @@ export default function ChangePassword() {
             className="form-control mb-3"
             required
           />
-          <button className="btn btn-primary">Save password</button>
+          <FormSubmitButton pendingLabel="Saving password…">
+            Save password
+          </FormSubmitButton>
         </form>
       </div>
     </main>

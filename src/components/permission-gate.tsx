@@ -13,7 +13,7 @@ const labels: Record<
   notifications: {
     icon: "ri-notification-3-line",
     title: "Notifications",
-    text: "Receive assignments, approvals, reminders and SLA alerts.",
+    text: "Receive task updates. On iOS 16.4+, install Opsora to your Home Screen first. Sound follows device settings.",
   },
   location: {
     icon: "ri-map-pin-line",

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireOrganizationAdmin } from "@/lib/admin-context";
 import { createEmployee, deactivateEmployee, deleteEmployee } from "./actions";
 import { PasswordInput } from "@/components/password-input";
+import { FormSubmitButton } from "@/components/form-submit-button";
 export default async function Users({
   searchParams,
 }: {
@@ -148,7 +149,9 @@ export default async function Users({
             </select>
           </div>
           <div className="col-12">
-            <button className="btn btn-primary">Create company user</button>
+            <FormSubmitButton pendingLabel="Creating user…">
+              Create company user
+            </FormSubmitButton>
           </div>
         </form>
       </details>
@@ -193,15 +196,21 @@ export default async function Users({
                       <>
                         <form action={deactivateEmployee}>
                           <input type="hidden" name="id" value={u.id} />
-                          <button className="btn btn-sm btn-outline-warning">
+                          <FormSubmitButton
+                            className="btn btn-sm btn-outline-warning"
+                            pendingLabel="Updating…"
+                          >
                             Deactivate
-                          </button>
+                          </FormSubmitButton>
                         </form>
                         <form action={deleteEmployee}>
                           <input type="hidden" name="id" value={u.id} />
-                          <button className="btn btn-sm btn-outline-danger">
+                          <FormSubmitButton
+                            className="btn btn-sm btn-outline-danger"
+                            pendingLabel="Deleting…"
+                          >
                             Delete
-                          </button>
+                          </FormSubmitButton>
                         </form>
                       </>
                     )}
