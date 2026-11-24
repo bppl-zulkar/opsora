@@ -4,13 +4,14 @@ import { usePathname } from "next/navigation";
 export function MobileSidebarToggle() {
   const pathname = usePathname();
   const [openPath, setOpenPath] = useState<string | null>(null);
-  const open = openPath === pathname;
+  const open = pathname !== null && openPath === pathname;
+
   return (
     <>
       <button
         type="button"
         className="mobile-menu-button"
-        onClick={() => setOpenPath(open ? null : pathname)}
+        onClick={() => pathname && setOpenPath(open ? null : pathname)}
         aria-label={open ? "Close navigation" : "Open navigation"}
         aria-expanded={open}
         aria-controls="primary-sidebar"
