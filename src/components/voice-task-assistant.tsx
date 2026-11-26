@@ -25,15 +25,13 @@ type SpeechRecognitionLike = {
 };
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
-const welcome: ChatMessage = {
-  role: "assistant",
-  text: "Hello. I’m your Opsora assistant. Ask me about your tasks, or say “Hey Opsora” before your question.",
-};
-
-export function VoiceTaskAssistant() {
+export function VoiceTaskAssistant({ userName }: { userName: string }) {
   const [open, setOpen] = useState(false);
   const [fullScreen, setFullScreen] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([welcome]);
+  const [messages, setMessages] = useState<ChatMessage[]>([{
+    role: "assistant",
+    text: `Hello, ${userName}. I’m your Opsora assistant. Ask me about your tasks, or say “Hey Opsora” before your question.`,
+  }]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
@@ -42,6 +40,9 @@ export function VoiceTaskAssistant() {
   const [liveTranscript, setLiveTranscript] = useState("");
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const voiceModeRef = useRef(false);
+  const speakingRef = useRef(false);
+  const voiceSessionGreetedRef = useRef(false);
+  const recognitionErrorReportedRef = useRef(false);
   const wakeWordModeRef = useRef(false);
   const busyRef = useRef(false);
   const messagesRef = useRef(messages);
@@ -50,6 +51,7 @@ export function VoiceTaskAssistant() {
   useEffect(() => { messagesRef.current = messages; endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, liveTranscript]);
   useEffect(() => () => {
     voiceModeRef.current = false;
+    speakingRef.current = false;
     recognitionRef.current?.stop();
     window.speechSynthesis?.cancel();
   }, []);
@@ -61,6 +63,7 @@ export function VoiceTaskAssistant() {
     }
     window.speechSynthesis.cancel();
     window.speechSynthesis.resume();
+    speakingRef.current = true;
     setSpeaking(false);
     const utterance = new SpeechSynthesisUtterance(text);
     const voices = window.speechSynthesis.getVoices();
@@ -74,10 +77,12 @@ export function VoiceTaskAssistant() {
     utterance.volume = 1;
     utterance.onstart = () => setSpeaking(true);
     utterance.onend = () => {
+      speakingRef.current = false;
       setSpeaking(false);
       if (voiceModeRef.current) startListening();
     };
     utterance.onerror = (event) => {
+      speakingRef.current = false;
       setSpeaking(false);
       if (!voiceModeRef.current || event.error === "canceled" || event.error === "interrupted") return;
       setMessages((current) => [...current, { role: "assistant", text: "I couldn’t play the audio reply. The written answer is still available above." }]);
@@ -86,6 +91,8 @@ export function VoiceTaskAssistant() {
     try {
       window.speechSynthesis.speak(utterance);
     } catch {
+      speakingRef.current = false;
+      setSpeaking(false);
       setMessages((current) => [...current, { role: "assistant", text: "I couldn’t play the audio reply. The written answer is still available above." }]);
       return false;
     }
@@ -132,11 +139,13 @@ export function VoiceTaskAssistant() {
     if (!Recognition) {
       setMessages((current) => [...current, { role: "assistant", text: "Voice recognition is not available in this browser. You can still type your question." }]);
       voiceModeRef.current = false;
+      voiceSessionGreetedRef.current = false;
       wakeWordModeRef.current = false;
       setAwaitingWakeWord(false);
       return;
     }
     window.speechSynthesis?.cancel();
+    speakingRef.current = false;
     setSpeaking(false);
     const recognition = new Recognition();
     recognition.lang = "en-US";
@@ -166,6 +175,7 @@ export function VoiceTaskAssistant() {
       void ask(cleanTranscript);
     };
     recognition.onresult = (event) => {
+      if (speakingRef.current || window.speechSynthesis?.speaking) return;
       let interim = "";
       let final = "";
       const startIndex = event.resultIndex ?? 0;
@@ -191,7 +201,7 @@ export function VoiceTaskAssistant() {
         transcriptHandled = true;
         handleTranscript(latestTranscript);
       }
-      if (voiceModeRef.current && !busyRef.current && !window.speechSynthesis?.speaking) {
+      if (voiceModeRef.current && !busyRef.current && !speakingRef.current && !window.speechSynthesis?.speaking) {
         window.setTimeout(() => startListening(), 250);
       }
     };
@@ -199,7 +209,11 @@ export function VoiceTaskAssistant() {
       setListening(false);
       if (event.error === "aborted") return;
       if (event.error === "no-speech") return;
+      if (recognitionErrorReportedRef.current) return;
+      recognitionErrorReportedRef.current = true;
       voiceModeRef.current = false;
+      speakingRef.current = false;
+      voiceSessionGreetedRef.current = false;
       wakeWordModeRef.current = false;
       setAwaitingWakeWord(false);
       const message = event.error === "not-allowed" || event.error === "service-not-allowed"
@@ -214,6 +228,8 @@ export function VoiceTaskAssistant() {
     try { recognition.start(); } catch {
       setListening(false);
       voiceModeRef.current = false;
+      speakingRef.current = false;
+      voiceSessionGreetedRef.current = false;
       wakeWordModeRef.current = false;
       setAwaitingWakeWord(false);
       setMessages((current) => [...current, { role: "assistant", text: "I couldn’t start voice recognition. Please try again or type your question." }]);
@@ -225,32 +241,44 @@ export function VoiceTaskAssistant() {
       recognitionRef.current?.stop();
       setListening(false);
       voiceModeRef.current = false;
+      voiceSessionGreetedRef.current = false;
       wakeWordModeRef.current = false;
       setAwaitingWakeWord(false);
       setLiveTranscript("");
       return;
     }
     voiceModeRef.current = true;
+    recognitionErrorReportedRef.current = false;
     wakeWordModeRef.current = fullScreen;
     setAwaitingWakeWord(fullScreen);
     window.speechSynthesis?.resume();
     startListening();
+    if (!voiceSessionGreetedRef.current) {
+      voiceSessionGreetedRef.current = true;
+      if (!speak(`Hi ${userName}. I’m Opsora. I can see you’re signed in as ${userName}. What would you like to know about your tasks?`)) startListening();
+    }
   }
 
   function openLiveCommands() {
     setOpen(true);
     setFullScreen(true);
     voiceModeRef.current = true;
+    recognitionErrorReportedRef.current = false;
+    voiceSessionGreetedRef.current = false;
     wakeWordModeRef.current = true;
     setAwaitingWakeWord(true);
     window.speechSynthesis?.resume();
     startListening();
+    voiceSessionGreetedRef.current = true;
+    if (!speak(`Hi ${userName}. I’m Opsora. I can see you’re signed in as ${userName}. What would you like to know about your tasks?`)) startListening();
   }
 
   function closeAssistant() {
     recognitionRef.current?.stop();
     window.speechSynthesis?.cancel();
     voiceModeRef.current = false;
+    speakingRef.current = false;
+    voiceSessionGreetedRef.current = false;
     wakeWordModeRef.current = false;
     setListening(false);
     setAwaitingWakeWord(false);

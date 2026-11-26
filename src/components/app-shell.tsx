@@ -93,7 +93,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className={`shell workspace-bg-${background}`}>
       <PushSubscriptionSync />
-      <VoiceTaskAssistant />
+      <VoiceTaskAssistant userName={p?.full_name ?? user.email ?? "there"} />
       <aside className="sidebar" id="primary-sidebar">
         <div className="sidebar-brand">
           <Logo src={sidebarLogo} name={companyName} />
