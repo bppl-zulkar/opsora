@@ -8,6 +8,7 @@ import { ThemeControls } from "./theme-controls";
 import { AccountMenu } from "./account-menu";
 import { PushSubscriptionSync } from "./push-subscription-sync";
 import { WorkspaceNavigation } from "./workspace-navigation";
+import { GlobalSearch } from "./global-search";
 const primaryNav = [
   ["/dashboard", "ri-dashboard-2-line", "Dashboard"],
   ["/tasks", "ri-task-line", "Tasks"],
@@ -114,10 +115,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
       <div className="main">
         <header className="topbar">
           <MobileSidebarToggle />
-          <div className="global-search">
-            <i className="ri-search-line me-2" />
-            <span>Search tasks, company users and reports</span>
-          </div>
+          <GlobalSearch />
           <div className="topbar-actions">
             <ThemeControls />
             <Link

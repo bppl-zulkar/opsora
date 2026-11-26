@@ -56,16 +56,16 @@ export default async function Roles({
           <tbody>
             {(roles ?? []).map((r) => (
               <tr key={r.id}>
-                <td>
+                <td data-label="Role">
                   <strong>{r.name}</strong>
                   <small className="d-block text-secondary">
                     {r.description || "No description"}
                   </small>
                 </td>
-                <td>{r.user_roles?.[0]?.count ?? 0}</td>
-                <td>{r.role_permissions?.[0]?.count ?? 0}</td>
-                <td>{r.system_key ? "System" : "Custom"}</td>
-                <td>
+                <td data-label="Users">{r.user_roles?.[0]?.count ?? 0}</td>
+                <td data-label="Permissions">{r.role_permissions?.[0]?.count ?? 0}</td>
+                <td data-label="Type">{r.system_key ? "System" : "Custom"}</td>
+                <td data-label="Actions">
                   <div className="d-flex gap-1">
                     <Link
                       href={`/admin/roles/${r.id}/edit`}

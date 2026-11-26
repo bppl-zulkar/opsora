@@ -93,23 +93,23 @@ export default async function AuditLogs({
               };
               return (
                 <tr key={log.id}>
-                  <td className="text-nowrap">{formatIST(log.created_at)}</td>
-                  <td>
+                  <td data-label="Timestamp" className="text-nowrap">{formatIST(log.created_at)}</td>
+                  <td data-label="Actor">
                     {actor?.full_name ?? "System"}
                     <small className="d-block text-secondary">
                       {actor?.employee_id}
                     </small>
                   </td>
-                  <td>
+                  <td data-label="Action">
                     <span className="status">{log.action}</span>
                   </td>
-                  <td>
+                  <td data-label="Entity">
                     {log.entity_type}
                     <small className="d-block text-secondary">
                       {log.entity_id}
                     </small>
                   </td>
-                  <td>
+                  <td data-label="Change">
                     <details>
                       <summary>View change</summary>
                       <pre className="audit-json">
@@ -125,7 +125,7 @@ export default async function AuditLogs({
                       </pre>
                     </details>
                   </td>
-                  <td>
+                  <td data-label="Correlation">
                     <code>{String(log.correlation_id).slice(0, 8)}</code>
                   </td>
                 </tr>

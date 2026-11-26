@@ -102,19 +102,19 @@ export default async function Departments({
           <tbody>
             {(departments ?? []).map((d) => (
               <tr key={d.id}>
-                <td>
+                <td data-label="Department">
                   <strong>{d.name}</strong>
                   <small className="d-block text-secondary">
                     {d.code} · {d.office_location ?? "No location"}
                   </small>
                 </td>
-                <td>
+                <td data-label="Head">
                   {(d.head as unknown as { full_name?: string })?.full_name ??
                     "—"}
                 </td>
-                <td>{d.official_email ?? "—"}</td>
-                <td>{d.active ? "Active" : "Inactive"}</td>
-                <td>
+                <td data-label="Contact">{d.official_email ?? "—"}</td>
+                <td data-label="Status">{d.active ? "Active" : "Inactive"}</td>
+                <td data-label="Actions">
                   <div className="d-flex gap-1">
                     <Link
                       href={`/admin/departments/${d.id}/edit`}

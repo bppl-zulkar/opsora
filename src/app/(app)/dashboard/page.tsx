@@ -21,14 +21,15 @@ export default async function Dashboard() {
   const tasks = data ?? [];
   const recentTasks = tasks.slice(0, 8);
   const open = tasks.filter(
-      (t) => !["closed", "cancelled"].includes(t.status),
+      (t) => !["completed", "closed", "cancelled"].includes(t.status),
     ).length,
     overdue = tasks.filter(
       (t) =>
         new Date(t.current_deadline) < new Date() &&
         !["closed", "completed", "cancelled"].includes(t.status),
     ).length,
-    completed = tasks.filter((t) =>
+    completed = tasks.filter((t) => t.status === "completed").length,
+    finished = tasks.filter((t) =>
       ["completed", "closed"].includes(t.status),
     ).length,
     dueToday = tasks.filter(
@@ -38,7 +39,7 @@ export default async function Dashboard() {
         !["closed", "cancelled"].includes(t.status),
     ).length,
     completionRate = tasks.length
-      ? Math.round((completed / tasks.length) * 100)
+      ? Math.round((finished / tasks.length) * 100)
       : 0;
   const workflow = [
     ["Assigned", tasks.filter((t) => t.status === "assigned").length],
@@ -49,7 +50,7 @@ export default async function Dashboard() {
       ).length,
     ],
     ["On hold", tasks.filter((t) => t.status === "on_hold").length],
-    ["Completed", completed],
+    ["Completed", finished],
   ] as const;
   return (
     <main className="page dashboard-page">
@@ -81,19 +82,23 @@ export default async function Dashboard() {
           </div>
           <div>
             <strong>Completion rate</strong>
-            <small>{completed} tasks completed</small>
+            <small>{finished} tasks completed</small>
           </div>
         </div>
       </section>
       <div className="row g-3 mb-4 dashboard-kpis">
         {[
-          ["Open tasks", open, "ri-list-check-3"],
-          ["Due today", dueToday, "ri-calendar-event-line"],
-          ["Overdue", overdue, "ri-alarm-warning-line"],
-          ["Completed", completed, "ri-checkbox-circle-line"],
+          ["Open tasks", open, "ri-list-check-3", "/tasks?view=open"],
+          ["Due today", dueToday, "ri-calendar-event-line", "/tasks?view=due-today"],
+          ["Overdue", overdue, "ri-alarm-warning-line", "/tasks?view=overdue"],
+          ["Completed", completed, "ri-checkbox-circle-line", "/tasks?view=completed"],
         ].map((x) => (
           <div className="col-sm-6 col-xl-3" key={x[0] as string}>
-            <div className="kpi-card dashboard-kpi-card">
+            <Link
+              href={x[3] as string}
+              className="kpi-card dashboard-kpi-card dashboard-kpi-link"
+              aria-label={`View ${x[0]}`}
+            >
               <div className="dashboard-kpi-icon">
                 <i className={`${x[2]}`} />
               </div>
@@ -102,7 +107,8 @@ export default async function Dashboard() {
                 <div className="kpi-number">{x[1]}</div>
                 <small className="text-secondary">Live workspace data</small>
               </div>
-            </div>
+              <i className="ri-arrow-right-line dashboard-kpi-arrow" aria-hidden="true" />
+            </Link>
           </div>
         ))}
       </div>

@@ -80,10 +80,10 @@ export default async function Organizations({
           <tbody>
             {(organizations ?? []).map((o) => (
               <tr key={o.id}>
-                <td>{o.name}</td>
-                <td>{o.slug}</td>
-                <td>{o.task_prefix}</td>
-                <td>{o.active ? "Active" : "Inactive"}</td>
+                <td data-label="Company">{o.name}</td>
+                <td data-label="Slug">{o.slug}</td>
+                <td data-label="Task prefix">{o.task_prefix}</td>
+                <td data-label="Status">{o.active ? "Active" : "Inactive"}</td>
               </tr>
             ))}
           </tbody>

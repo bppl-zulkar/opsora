@@ -239,24 +239,24 @@ export default async function Reports({
             <tbody>
               {(tasks ?? []).map((t) => (
                 <tr key={t.id}>
-                  <td>
+                  <td data-label="Reference">
                     <Link href={`/tasks/${t.id}`}>{t.reference}</Link>
                   </td>
-                  <td>{t.title}</td>
-                  <td>
+                  <td data-label="Task">{t.title}</td>
+                  <td data-label="Created by">
                     {(t.creator as unknown as { full_name?: string })
                       ?.full_name ?? "—"}
                   </td>
-                  <td>
+                  <td data-label="Assigned to">
                     {(t.owner as unknown as { full_name?: string })
                       ?.full_name ?? "—"}
                   </td>
-                  <td>
+                  <td data-label="Status">
                     <span className="status">{formatWorkStatus(t.status)}</span>
                   </td>
-                  <td>{t.priority}</td>
-                  <td>{formatIST(t.current_deadline)}</td>
-                  <td>
+                  <td data-label="Priority">{t.priority}</td>
+                  <td data-label="Deadline">{formatIST(t.current_deadline)}</td>
+                  <td data-label="Reports">
                     <div className="d-flex gap-1">
                       <ReportDownloadButton
                         href={`/api/reports/tasks/${t.id}?format=pdf`}

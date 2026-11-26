@@ -2,6 +2,8 @@ import Link from "next/link";
 import { getTaskAccess, ownTaskFilter } from "@/lib/task-access";
 import { formatIST, formatWorkStatus } from "@/lib/format";
 import { endOfDay, startOfDay } from "date-fns";
+import { redirect } from "next/navigation";
+import { ResponsiveTaskStatus } from "@/components/responsive-task-status";
 type Filters = {
   view?: string;
   q?: string;
@@ -9,8 +11,25 @@ type Filters = {
   priority?: string;
   success?: string;
   error?: string;
+  page?: string;
 };
+const PAGE_SIZE = 20;
+const taskViews = [
+  ["all", "All tasks"],
+  ["open", "Open"],
+  ["my", "My tasks"],
+  ["assigned-by-me", "Assigned by me"],
+  ["wip", "Work in progress"],
+  ["on-hold", "On hold"],
+  ["overdue", "Overdue"],
+  ["due-today", "Due today"],
+  ["upcoming", "Upcoming"],
+  ["completed", "Completed"],
+  ["closed", "Closed"],
+] as const;
 const labels: Record<string, string> = {
+  all: "All tasks",
+  open: "Open tasks",
   my: "My tasks",
   "assigned-by-me": "Assigned by me",
   department: "Department tasks",
@@ -25,6 +44,18 @@ const labels: Record<string, string> = {
   approvals: "Pending approvals",
   extensions: "Extension requests",
 };
+
+function taskListHref(filters: Filters, updates: Partial<Filters>) {
+  const params = new URLSearchParams();
+  const next = { ...filters, ...updates };
+  for (const [key, value] of Object.entries(next)) {
+    if (value && !(key === "view" && value === "all") && key !== "success" && key !== "error") {
+      params.set(key, value);
+    }
+  }
+  const query = params.toString();
+  return query ? `/tasks?${query}` : "/tasks";
+}
 export default async function Tasks({
   searchParams,
 }: {
@@ -32,6 +63,8 @@ export default async function Tasks({
 }) {
   const filters = await searchParams,
     view = filters.view ?? "all";
+  const requestedPage = Math.max(1, Number.parseInt(filters.page ?? "1", 10) || 1);
+  const rangeFrom = (requestedPage - 1) * PAGE_SIZE;
   const { client: s, userId, isAdmin } = await getTaskAccess();
   const { data: profile } = await s
     .from("profiles")
@@ -42,12 +75,14 @@ export default async function Tasks({
     .from("tasks")
     .select(
       "id,reference,title,status,priority,current_deadline,created_at,owner:profiles!tasks_primary_owner_id_fkey(full_name)",
+      { count: "exact" },
     )
     .is("deleted_at", null)
-    .order("created_at", { ascending: false })
-    .limit(250);
+    .order("created_at", { ascending: false });
   if (!isAdmin) query = query.or(ownTaskFilter(userId));
-  if (view === "my") query = query.eq("primary_owner_id", userId);
+  if (view === "open")
+    query = query.not("status", "in", "(completed,closed,cancelled)");
+  else if (view === "my") query = query.eq("primary_owner_id", userId);
   else if (view === "assigned-by-me") query = query.eq("created_by", userId);
   else if (view === "department" && profile?.department_id)
     query = query.eq("assigned_department_id", profile.department_id);
@@ -64,6 +99,15 @@ export default async function Tasks({
     query = query
       .gt("current_deadline", endOfDay(new Date()).toISOString())
       .not("status", "in", "(closed,cancelled)");
+  else if (view === "wip")
+    query = query.in("status", [
+      "acknowledged",
+      "accepted",
+      "in_progress",
+      "rework_required",
+      "reopened",
+    ]);
+  else if (view === "on-hold") query = query.eq("status", "on_hold");
   else if (view === "completed") query = query.eq("status", "completed");
   else if (view === "closed") query = query.eq("status", "closed");
   else if (view === "approvals")
@@ -76,8 +120,17 @@ export default async function Tasks({
     );
   if (filters.status) query = query.eq("status", filters.status);
   if (filters.priority) query = query.eq("priority", filters.priority);
-  const { data } = await query;
+  query = query.range(rangeFrom, rangeFrom + PAGE_SIZE - 1);
+  const { data, count } = await query;
   const tasks = data ?? [];
+  const totalTasks = count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalTasks / PAGE_SIZE));
+  if (requestedPage > totalPages) {
+    redirect(taskListHref(filters, { page: String(totalPages) }));
+  }
+  const currentPage = Math.min(requestedPage, totalPages);
+  const firstResult = totalTasks ? rangeFrom + 1 : 0;
+  const lastResult = Math.min(rangeFrom + tasks.length, totalTasks);
   return (
     <main className="page">
       {filters.success && (
@@ -97,19 +150,19 @@ export default async function Tasks({
           <i className="ri-add-line me-1" /> Create task
         </Link>
       </div>
+      <ResponsiveTaskStatus
+        value={view}
+        options={taskViews.map(([value, label]) => ({
+          value,
+          label,
+          href: taskListHref(filters, { view: value, page: undefined }),
+        }))}
+      />
       <div className="task-view-tabs mb-3">
-        {[
-          ["all", "All"],
-          ["my", "My tasks"],
-          ["assigned-by-me", "Assigned by me"],
-          ["overdue", "Overdue"],
-          ["due-today", "Due today"],
-          ["upcoming", "Upcoming"],
-          ["closed", "Closed"],
-        ].map(([key, label]) => (
+        {taskViews.map(([key, label]) => (
           <Link
             className={`btn btn-sm ${view === key ? "btn-primary" : "btn-outline-secondary"}`}
-            href={key === "all" ? "/tasks" : `/tasks?view=${key}`}
+            href={taskListHref(filters, { view: key, page: undefined })}
             key={key}
           >
             {label}
@@ -170,6 +223,12 @@ export default async function Tasks({
           </div>
         </div>
       </form>
+      <div className="task-results-summary">
+        <span>
+          Showing <strong>{firstResult}–{lastResult}</strong> of <strong>{totalTasks}</strong> tasks
+        </span>
+        <span>Page {currentPage} of {totalPages}</span>
+      </div>
       <div className="panel table-responsive">
         <table className="table align-middle mb-0">
           <thead>
@@ -214,6 +273,49 @@ export default async function Tasks({
           </tbody>
         </table>
       </div>
+      {totalPages > 1 && (
+        <nav className="task-pagination" aria-label="Task list pagination">
+          <Link
+            className={`btn btn-outline-secondary${currentPage <= 1 ? " disabled" : ""}`}
+            href={taskListHref(filters, { page: String(Math.max(1, currentPage - 1)) })}
+            aria-disabled={currentPage <= 1}
+            tabIndex={currentPage <= 1 ? -1 : undefined}
+          >
+            <i className="ri-arrow-left-s-line" aria-hidden="true" /> Previous
+          </Link>
+          <div className="task-page-numbers">
+            {Array.from({ length: totalPages }, (_, index) => index + 1)
+              .filter(
+                (page) =>
+                  page === 1 ||
+                  page === totalPages ||
+                  Math.abs(page - currentPage) <= 1,
+              )
+              .map((page, index, visiblePages) => (
+                <span key={page} className="d-contents">
+                  {index > 0 && page - visiblePages[index - 1] > 1 && (
+                    <span className="task-page-ellipsis" aria-hidden="true">…</span>
+                  )}
+                  <Link
+                    className={`btn ${page === currentPage ? "btn-primary" : "btn-outline-secondary"}`}
+                    href={taskListHref(filters, { page: String(page) })}
+                    aria-current={page === currentPage ? "page" : undefined}
+                  >
+                    {page}
+                  </Link>
+                </span>
+              ))}
+          </div>
+          <Link
+            className={`btn btn-outline-secondary${currentPage >= totalPages ? " disabled" : ""}`}
+            href={taskListHref(filters, { page: String(Math.min(totalPages, currentPage + 1)) })}
+            aria-disabled={currentPage >= totalPages}
+            tabIndex={currentPage >= totalPages ? -1 : undefined}
+          >
+            Next <i className="ri-arrow-right-s-line" aria-hidden="true" />
+          </Link>
+        </nav>
+      )}
     </main>
   );
 }
