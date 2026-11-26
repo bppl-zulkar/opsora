@@ -37,6 +37,7 @@ export function VoiceTaskAssistant() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
   const [awaitingWakeWord, setAwaitingWakeWord] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState("");
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -59,6 +60,8 @@ export function VoiceTaskAssistant() {
       return false;
     }
     window.speechSynthesis.cancel();
+    window.speechSynthesis.resume();
+    setSpeaking(false);
     const utterance = new SpeechSynthesisUtterance(text);
     const voices = window.speechSynthesis.getVoices();
     const preferredNames = ["Samantha", "Jenny", "Aria", "Ava", "Zira", "Susan", "Victoria", "Google US English"];
@@ -68,8 +71,14 @@ export function VoiceTaskAssistant() {
     utterance.lang = "en-US";
     utterance.rate = .96;
     utterance.pitch = 1.08;
-    utterance.onend = () => { if (voiceModeRef.current) startListening(); };
+    utterance.volume = 1;
+    utterance.onstart = () => setSpeaking(true);
+    utterance.onend = () => {
+      setSpeaking(false);
+      if (voiceModeRef.current) startListening();
+    };
     utterance.onerror = (event) => {
+      setSpeaking(false);
       if (!voiceModeRef.current || event.error === "canceled" || event.error === "interrupted") return;
       setMessages((current) => [...current, { role: "assistant", text: "I couldn’t play the audio reply. The written answer is still available above." }]);
       window.setTimeout(() => startListening(), 250);
@@ -128,6 +137,7 @@ export function VoiceTaskAssistant() {
       return;
     }
     window.speechSynthesis?.cancel();
+    setSpeaking(false);
     const recognition = new Recognition();
     recognition.lang = "en-US";
     recognition.continuous = false;
@@ -223,6 +233,7 @@ export function VoiceTaskAssistant() {
     voiceModeRef.current = true;
     wakeWordModeRef.current = fullScreen;
     setAwaitingWakeWord(fullScreen);
+    window.speechSynthesis?.resume();
     startListening();
   }
 
@@ -232,6 +243,7 @@ export function VoiceTaskAssistant() {
     voiceModeRef.current = true;
     wakeWordModeRef.current = true;
     setAwaitingWakeWord(true);
+    window.speechSynthesis?.resume();
     startListening();
   }
 
@@ -244,6 +256,7 @@ export function VoiceTaskAssistant() {
     setAwaitingWakeWord(false);
     setLiveTranscript("");
     setFullScreen(false);
+    setSpeaking(false);
     setOpen(false);
   }
 
@@ -254,15 +267,22 @@ export function VoiceTaskAssistant() {
       {open && (
         <section className="voice-assistant-panel" aria-label="Opsora voice assistant">
           <header>
-            <div className="jarvis-orb"><span /></div>
-            <div><strong>Opsora Assistant</strong><small>{listening ? awaitingWakeWord ? "Say “Hey Opsora” or ask a question…" : "Listening in English…" : busy ? "Checking live tasks…" : "Online · Task aware"}</small></div>
+            <div className={`jarvis-orb${listening ? " is-listening" : ""}${speaking ? " is-speaking" : ""}`}><span /></div>
+            <div><strong>Opsora Assistant</strong><small>{speaking ? "Speaking response…" : listening ? awaitingWakeWord ? "Say “Hey Opsora” or ask a question…" : "Listening in English…" : busy ? "Checking live tasks…" : "Online · Task aware"}</small></div>
             <button type="button" onClick={() => setFullScreen((value) => !value)} aria-label={fullScreen ? "Exit full screen" : "Open full screen"}><i className={fullScreen ? "ri-contract-left-right-line" : "ri-expand-left-right-line"} /></button>
             <button type="button" onClick={closeAssistant} aria-label="Close assistant"><i className="ri-close-line" /></button>
           </header>
           <div className="voice-assistant-messages" aria-live="polite">
             {messages.map((message, index) => (
               <div className={`assistant-response ${message.role}`} key={`${message.role}-${index}`}>
-                <div className={`assistant-message ${message.role}`}>{message.text}</div>
+                <div className={`assistant-message ${message.role}`}>
+                  {message.text}
+                  {message.role === "assistant" && (
+                    <button type="button" className="assistant-replay" onClick={() => speak(message.text)} aria-label="Play this reply aloud">
+                      <i className="ri-volume-up-line" /> Listen
+                    </button>
+                  )}
+                </div>
                 {message.results?.length ? (
                   <div className="assistant-task-results">
                     {message.results.map((task) => (

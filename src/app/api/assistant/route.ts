@@ -12,8 +12,13 @@ const requestSchema = z.object({
     .optional(),
 });
 
-const finishedStatuses = ["completed", "closed"];
-const openStatuses = ["assigned", "acknowledged", "accepted", "in_progress", "on_hold", "pending_verification", "rework_required", "reopened"];
+const finishedStatuses = ["completed", "closed", "cancelled"];
+const openStatuses = ["draft", "assigned", "acknowledged", "accepted", "scheduled", "in_progress", "on_hold", "blocked", "pending_information", "pending_verification", "rework_required", "reopened"];
+const formatTaskDeadline = (value: string) =>
+  new Intl.DateTimeFormat("en-IN", {
+    dateStyle: "medium",
+    timeZone: "Asia/Kolkata",
+  }).format(new Date(value));
 
 export async function POST(request: Request) {
   const session = await createClient();
@@ -87,14 +92,33 @@ export async function POST(request: Request) {
   } else if (/my task|assigned to me|do i have/.test(message)) {
     filtered = filtered.filter((task) => task.primary_owner_id === user.id);
   }
+  const mentionedTask = (tasks ?? []).find((task) =>
+    message.includes(task.reference.toLowerCase()) ||
+    (task.title.length >= 8 && message.includes(task.title.toLowerCase())),
+  );
+  if (mentionedTask) filtered = [mentionedTask];
 
   const now = new Date();
   if (/overdue|late/.test(message)) filtered = filtered.filter((task) => new Date(task.current_deadline) < now && !finishedStatuses.includes(task.status));
+  else if (/due today|today/.test(message)) {
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(now);
+    end.setHours(23, 59, 59, 999);
+    filtered = filtered.filter((task) => {
+      const deadline = new Date(task.current_deadline);
+      return deadline >= start && deadline <= end;
+    });
+  }
+  else if (/upcoming|due soon/.test(message)) filtered = filtered.filter((task) => new Date(task.current_deadline) > now && !finishedStatuses.includes(task.status));
   else if (/completed|finished|done/.test(message)) filtered = filtered.filter((task) => finishedStatuses.includes(task.status));
   else if (/closed/.test(message)) filtered = filtered.filter((task) => task.status === "closed");
   else if (/on hold|held/.test(message)) filtered = filtered.filter((task) => task.status === "on_hold");
   else if (/progress|working|wip/.test(message)) filtered = filtered.filter((task) => ["acknowledged", "accepted", "in_progress", "rework_required", "reopened"].includes(task.status));
   else if (/open|pending|active/.test(message)) filtered = filtered.filter((task) => openStatuses.includes(task.status));
+  if (/critical|urgent/.test(message)) filtered = filtered.filter((task) => ["critical", "high"].includes(task.priority));
+  else if (/\bhigh\b/.test(message)) filtered = filtered.filter((task) => task.priority === "high");
+  else if (/\blow\b/.test(message)) filtered = filtered.filter((task) => task.priority === "low");
 
   const count = filtered.length;
   const asksCount = /how many|count|number of/.test(message);
@@ -131,7 +155,13 @@ export async function POST(request: Request) {
     } : null,
   };
   });
-  const detailPrompt = count === 1 ? `The task is ${results[0].reference}, ${results[0].title}. Its status is ${results[0].status}.` : "I have organized the details in the chat.";
+  const detailPrompt = count === 1
+    ? `The task is ${results[0].reference}, ${results[0].title}. Its status is ${results[0].status}, priority is ${results[0].priority}, it is ${results[0].progress}% complete, owner is ${results[0].owner}, and it is due ${formatTaskDeadline(results[0].deadline)}.`
+    : "I have organized the details in the chat.";
   const remainder = count > results.length ? ` ${count - results.length} additional tasks are available on the Tasks page.` : "";
-  return NextResponse.json({ answer: `${intro} ${detailPrompt}${remainder}`, count, results });
+  const spokenDetails = results.slice(0, 3).map((task) => {
+    return `${task.reference}: ${task.title}. Status ${task.status}. ${task.progress}% complete. Owner ${task.owner}. Due ${formatTaskDeadline(task.deadline)}.`;
+  }).join(" ");
+  const listPrompt = count === 1 ? detailPrompt : `${spokenDetails} ${remainder || "Full details are in the chat."}`;
+  return NextResponse.json({ answer: `${intro} ${listPrompt}`, count, results });
 }
