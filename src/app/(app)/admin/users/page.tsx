@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { requireOrganizationAdmin } from "@/lib/admin-context";
-import { createEmployee, deactivateEmployee, deleteEmployee } from "./actions";
+import { createEmployee } from "./actions";
 import { PasswordInput } from "@/components/password-input";
 import { FormSubmitButton } from "@/components/form-submit-button";
+import { BulkUsersTable } from "@/components/bulk-users-table";
 export default async function Users({
   searchParams,
 }: {
@@ -156,73 +156,7 @@ export default async function Users({
           </div>
         </form>
       </details>
-      <div className="panel table-responsive">
-        <table className="table align-middle mb-0">
-          <thead>
-            <tr>
-              <th>Company user</th>
-              <th>Department</th>
-              <th>Designation</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(users ?? []).map((u) => (
-              <tr key={u.id}>
-                <td>
-                  <strong>{u.full_name}</strong>
-                  <small className="d-block text-secondary">
-                    {u.employee_id} · {u.email}
-                  </small>
-                </td>
-                <td>
-                  {(u.department as unknown as { name?: string })?.name ?? "—"}
-                </td>
-                <td>
-                  {(u.designation as unknown as { name?: string })?.name ?? "—"}
-                </td>
-                <td>
-                  <span className="status">{u.account_status}</span>
-                </td>
-                <td>
-                  <div className="d-flex gap-1">
-                    <Link
-                      className="btn btn-sm btn-outline-primary"
-                      href={`/admin/users/${u.id}/edit`}
-                    >
-                      Edit
-                    </Link>
-                    {u.id !== actorId && (
-                      <>
-                        <form action={deactivateEmployee}>
-                          <input type="hidden" name="id" value={u.id} />
-                          <FormSubmitButton
-                            className="btn btn-sm btn-outline-warning"
-                            pendingLabel="Updating…"
-                          >
-                            Deactivate
-                          </FormSubmitButton>
-                        </form>
-                        <form action={deleteEmployee}>
-                          <input type="hidden" name="id" value={u.id} />
-                          <FormSubmitButton
-                            className="btn btn-sm btn-outline-danger"
-                            pendingLabel="Deleting…"
-                            confirmMessage={`Delete ${u.full_name}? Their login will be revoked, while historical task records will be preserved.`}
-                          >
-                            Delete
-                          </FormSubmitButton>
-                        </form>
-                      </>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <BulkUsersTable users={users ?? []} actorId={actorId} />
     </main>
   );
 }

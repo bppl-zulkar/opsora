@@ -9,11 +9,17 @@ export function FormSubmitButton({
   pendingLabel = "Saving…",
   className = "btn btn-primary",
   confirmMessage,
+  name,
+  value,
+  disabled = false,
 }: {
   children: ReactNode;
   pendingLabel?: string;
   className?: string;
   confirmMessage?: string;
+  name?: string;
+  value?: string;
+  disabled?: boolean;
 }) {
   const { pending } = useFormStatus();
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -43,8 +49,10 @@ export function FormSubmitButton({
       ref={buttonRef}
       type="submit"
       className={className}
-      disabled={pending}
+      disabled={pending || disabled}
       aria-busy={pending}
+      name={name}
+      value={value}
       onClick={(event) => {
         if (confirmMessage && !window.confirm(confirmMessage)) {
           event.preventDefault();
