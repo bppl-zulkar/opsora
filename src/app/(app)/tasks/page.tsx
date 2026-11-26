@@ -7,6 +7,8 @@ type Filters = {
   q?: string;
   status?: string;
   priority?: string;
+  success?: string;
+  error?: string;
 };
 const labels: Record<string, string> = {
   my: "My tasks",
@@ -78,7 +80,13 @@ export default async function Tasks({
   const tasks = data ?? [];
   return (
     <main className="page">
-      <div className="d-flex justify-content-between mb-4">
+      {filters.success && (
+        <div className="alert alert-success">{filters.success}</div>
+      )}
+      {filters.error && (
+        <div className="alert alert-danger">{filters.error}</div>
+      )}
+      <div className="page-heading">
         <div>
           <h1 className="h3 fw-bold">{labels[view] ?? "All tasks"}</h1>
           <p className="text-secondary">
@@ -86,7 +94,7 @@ export default async function Tasks({
           </p>
         </div>
         <Link href="/tasks/new" className="btn btn-primary align-self-start">
-          Create task
+          <i className="ri-add-line me-1" /> Create task
         </Link>
       </div>
       <div className="task-view-tabs mb-3">
@@ -177,19 +185,23 @@ export default async function Tasks({
           <tbody>
             {tasks.map((t) => (
               <tr key={t.id}>
-                <td>
+                <td data-label="Reference">
                   <Link href={`/tasks/${t.id}`}>{t.reference}</Link>
                 </td>
-                <td>{t.title}</td>
-                <td>
+                <td data-label="Title">{t.title}</td>
+                <td data-label="Owner">
                   {(t.owner as unknown as { full_name?: string })?.full_name ??
                     "Unassigned"}
                 </td>
-                <td>
+                <td data-label="Status">
                   <span className="status">{formatWorkStatus(t.status)}</span>
                 </td>
-                <td>{t.priority}</td>
-                <td>{formatIST(t.current_deadline)}</td>
+                <td data-label="Priority">
+                  <span className={`priority-pill priority-${t.priority}`}>
+                    {t.priority}
+                  </span>
+                </td>
+                <td data-label="Deadline">{formatIST(t.current_deadline)}</td>
               </tr>
             ))}
             {!tasks.length && (

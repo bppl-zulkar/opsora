@@ -3,11 +3,16 @@ import { getTaskAccess, ownTaskFilter } from "@/lib/task-access";
 import { format } from "date-fns";
 const columns = [
   { key: "assigned", label: "Assigned", statuses: ["assigned"] },
-  { key: "acknowledged", label: "Acknowledged", statuses: ["acknowledged"] },
   {
     key: "wip",
-    label: "WIP",
-    statuses: ["accepted", "in_progress", "rework_required", "reopened"],
+    label: "Work in Progress",
+    statuses: [
+      "acknowledged",
+      "accepted",
+      "in_progress",
+      "rework_required",
+      "reopened",
+    ],
   },
   { key: "on_hold", label: "On hold", statuses: ["on_hold"] },
   {
@@ -30,7 +35,7 @@ export default async function Board() {
   const { data: tasks } = await query;
   return (
     <main className="page">
-      <div className="d-flex justify-content-between mb-4">
+      <div className="page-heading">
         <div>
           <h1 className="h3 fw-bold">Task board</h1>
           <p className="text-secondary">
@@ -38,7 +43,7 @@ export default async function Board() {
           </p>
         </div>
         <Link href="/tasks/new" className="btn btn-primary align-self-start">
-          Create task
+          <i className="ri-add-line me-1" /> Create task
         </Link>
       </div>
       <div className="kanban-board">

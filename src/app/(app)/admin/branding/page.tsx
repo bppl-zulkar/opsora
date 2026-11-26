@@ -50,9 +50,6 @@ export default async function Branding({
         initial={{
           companyName: org?.name ?? "Company",
           website: settings?.website ?? "",
-          primaryColor: branding?.primary_color ?? "#ff5c73",
-          secondaryColor: branding?.secondary_color ?? "#6c5ce7",
-          sidebarColor: branding?.sidebar_color ?? "#181a2b",
           theme: branding?.theme ?? "light",
           assets,
           urls,

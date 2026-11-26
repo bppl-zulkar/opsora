@@ -35,22 +35,32 @@ export default async function Login({
     }
   }
   return (
-    <main className="auth-page">
+    <main className="auth-page login-page">
       <section className="auth-art">
-        <div style={{ maxWidth: 620 }}>
-          <Logo src={loginLogo} name={org?.name ?? "Company"} />
-          <h1 className="display-4 fw-bold mt-5">
-            Operations move better when accountability is visible.
+        <div className="auth-orb auth-orb-one" />
+        <div className="auth-orb auth-orb-two" />
+        <div className="auth-art-copy">
+          <span className="auth-eyebrow">Operations, beautifully organized</span>
+          <h1>
+            Clear work. Calm teams. Better outcomes.
           </h1>
-          <p className="lead opacity-75">Assign. Execute. Verify. Track.</p>
+          <p>
+            Assign, execute, verify and report from one focused workspace built
+            for everyday accountability.
+          </p>
+          <div className="auth-feature-row">
+            <span><i className="ri-check-line" /> Live task visibility</span>
+            <span><i className="ri-check-line" /> Evidence-led completion</span>
+          </div>
         </div>
       </section>
       <section className="auth-form">
         <div className="auth-card">
-          <div className="d-lg-none mb-5">
+          <div className="login-brand mb-5">
             <Logo src={loginLogo} name={org?.name ?? "Company"} />
           </div>
-          <h2 className="fw-bold">Welcome back</h2>
+          <span className="auth-kicker">Welcome to your workspace</span>
+          <h2 className="fw-bold mt-2">Sign in to Opsora</h2>
           <p className="text-secondary mb-4">
             Sign in to your organization workspace.
           </p>

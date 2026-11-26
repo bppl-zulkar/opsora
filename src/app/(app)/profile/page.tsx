@@ -30,6 +30,22 @@ export default async function Profile({
       </main>
     );
   const edit = query.edit === "1";
+  const preferences = (profile.notification_preferences ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const selectedBackground = String(
+    preferences.background_theme ?? "aurora",
+  );
+  const backgrounds = [
+    ["none", "None"],
+    ["aurora", "Aurora"],
+    ["wave", "Wave"],
+    ["mist", "Mist"],
+    ["mesh", "Mesh"],
+    ["dawn", "Dawn"],
+    ["midnight", "Midnight"],
+  ];
   return (
     <main className="page profile-page">
       <div className="profile-hero">
@@ -73,6 +89,36 @@ export default async function Profile({
                 name="mobile"
                 defaultValue={profile.mobile ?? ""}
               />
+            </div>
+            <div className="col-12">
+              <div className="profile-background-setting">
+                <div className="mb-3">
+                  <h2 className="h5 mb-1">Background image</h2>
+                  <p className="text-secondary mb-0">
+                    Choose a lightweight abstract background for your own
+                    workspace. It does not change other users’ screens.
+                  </p>
+                </div>
+                <div className="background-picker" role="radiogroup">
+                  {backgrounds.map(([value, label]) => (
+                    <label className="background-option" key={value}>
+                      <input
+                        type="radio"
+                        name="background_theme"
+                        value={value}
+                        defaultChecked={selectedBackground === value}
+                      />
+                      <span
+                        className={`background-swatch workspace-bg-${value}`}
+                        aria-hidden="true"
+                      >
+                        {value === "none" && <i className="ri-close-line" />}
+                      </span>
+                      <span>{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
             </div>
             <div className="col-12 d-flex gap-2">
               <FormSubmitButton pendingLabel="Saving profile…">

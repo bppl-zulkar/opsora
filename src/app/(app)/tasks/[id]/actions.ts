@@ -3,11 +3,14 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { dispatchTaskEvent } from "@/lib/communications";
+import { getTaskAccess } from "@/lib/task-access";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { writeAudit } from "@/lib/audit";
+import { redirect } from "next/navigation";
 export async function transitionTask(fd: FormData) {
   const id = z.string().uuid().parse(fd.get("id")),
     action = z
       .enum([
-        "acknowledge",
         "start_wip",
         "complete",
         "hold",
@@ -28,12 +31,10 @@ export async function transitionTask(fd: FormData) {
     .single();
   if (!task) throw new Error("Task is unavailable");
   const ownerAction = task.primary_owner_id === user.id;
-  const approvalAction =
-    task.created_by === user.id || task.approver_id === user.id;
+  const approvalAction = task.created_by === user.id;
   const allowed =
-    (action === "acknowledge" && task.status === "assigned" && ownerAction) ||
     (action === "start_wip" &&
-      ["acknowledged", "accepted"].includes(task.status) &&
+      ["assigned", "acknowledged", "accepted"].includes(task.status) &&
       ownerAction) ||
     (action === "complete" && task.status === "in_progress" && ownerAction) ||
     (action === "hold" && task.status === "in_progress" && ownerAction) ||
@@ -43,10 +44,10 @@ export async function transitionTask(fd: FormData) {
       approvalAction);
   if (!allowed) throw new Error("This work update is no longer available");
   const transitions =
-    action === "acknowledge"
-      ? ["acknowledged"]
-      : action === "start_wip"
-        ? task.status === "acknowledged"
+    action === "start_wip"
+      ? task.status === "assigned"
+        ? ["acknowledged", "accepted", "in_progress"]
+        : task.status === "acknowledged"
           ? ["accepted", "in_progress"]
           : ["in_progress"]
         : action === "complete"
@@ -65,15 +66,13 @@ export async function transitionTask(fd: FormData) {
     if (error) throw new Error(error.message);
   }
   const visibleStatus =
-    action === "acknowledge"
-      ? "acknowledged"
-      : action === "start_wip" || action === "resume"
-        ? "WIP"
+    action === "start_wip" || action === "resume"
+      ? "Work in Progress"
         : action === "complete"
           ? "completed"
           : action === "hold"
             ? "on hold"
-            : "approved and closed";
+        : "approved and closed";
   await dispatchTaskEvent(
     id,
     user.id,
@@ -83,4 +82,66 @@ export async function transitionTask(fd: FormData) {
       : `Task status changed to ${visibleStatus}. Remarks: ${remarks}`,
   ).catch(console.error);
   revalidatePath(`/tasks/${id}`);
+}
+
+export async function deleteTask(fd: FormData) {
+  const id = z.string().uuid().parse(fd.get("id"));
+  try {
+    const { userId, organizationId, isAdmin } = await getTaskAccess();
+    if (!organizationId) throw new Error("Organization is unavailable");
+    const admin = createAdminClient();
+    const { data: task, error } = await admin
+      .from("tasks")
+      .select("id,reference,title,status,created_by,primary_owner_id")
+      .eq("id", id)
+      .eq("organization_id", organizationId)
+      .is("deleted_at", null)
+      .single();
+    if (error || !task) throw new Error("Task is unavailable");
+    if (!isAdmin && task.created_by !== userId)
+      throw new Error("Only the task creator or an administrator can delete it");
+
+    const deletedAt = new Date().toISOString();
+    const { error: updateError } = await admin
+      .from("tasks")
+      .update({
+        status: "cancelled",
+        cancelled_at: deletedAt,
+        deleted_at: deletedAt,
+        updated_at: deletedAt,
+      })
+      .eq("id", id)
+      .eq("organization_id", organizationId)
+      .is("deleted_at", null);
+    if (updateError) throw updateError;
+
+    await writeAudit(admin, {
+      organizationId,
+      actorId: userId,
+      action: "task.deleted",
+      entityType: "task",
+      entityId: id,
+      previous: {
+        reference: task.reference,
+        title: task.title,
+        status: task.status,
+      },
+      next: { status: "cancelled", deleted_at: deletedAt },
+      reason: isAdmin ? "Deleted by an administrator" : "Deleted by creator",
+    }).catch(console.error);
+    await dispatchTaskEvent(
+      id,
+      userId,
+      "Task deleted",
+      `"${task.title}" was deleted and removed from active work views.`,
+    ).catch(console.error);
+    revalidatePath("/tasks");
+    revalidatePath("/dashboard");
+    revalidatePath("/reports");
+  } catch (error) {
+    redirect(
+      `/tasks?error=${encodeURIComponent(error instanceof Error ? error.message : "Unable to delete task")}`,
+    );
+  }
+  redirect("/tasks?success=Task%20deleted");
 }

@@ -14,9 +14,6 @@ export function BrandingForm({
   initial: {
     companyName: string;
     website: string;
-    primaryColor: string;
-    secondaryColor: string;
-    sidebarColor: string;
     theme: string;
     assets: Record<string, string>;
     urls: Record<string, string>;
@@ -116,33 +113,6 @@ export function BrandingForm({
               type="url"
               className="form-control"
               defaultValue={initial.website}
-            />
-          </div>
-          <div className="col-sm-4">
-            <label className="form-label">Primary colour</label>
-            <input
-              name="primary_color"
-              type="color"
-              className="form-control form-control-color w-100"
-              defaultValue={initial.primaryColor}
-            />
-          </div>
-          <div className="col-sm-4">
-            <label className="form-label">Secondary colour</label>
-            <input
-              name="secondary_color"
-              type="color"
-              className="form-control form-control-color w-100"
-              defaultValue={initial.secondaryColor}
-            />
-          </div>
-          <div className="col-sm-4">
-            <label className="form-label">Sidebar colour</label>
-            <input
-              name="sidebar_color"
-              type="color"
-              className="form-control form-control-color w-100"
-              defaultValue={initial.sidebarColor}
             />
           </div>
           <div className="col-md-4">

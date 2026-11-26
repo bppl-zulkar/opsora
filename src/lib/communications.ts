@@ -283,9 +283,7 @@ export async function dispatchTaskEvent(
   const eventSummary =
     task.status === "assigned"
       ? `Task assigned by ${actorName} to ${ownerName}.`
-      : task.status === "acknowledged"
-        ? `Task acknowledged by ${actorName}.`
-        : task.status === "in_progress"
+      : task.status === "in_progress"
           ? `Work started or resumed by ${actorName}.`
           : task.status === "on_hold"
             ? `Task placed on hold by ${actorName}.`
@@ -318,7 +316,9 @@ export async function dispatchTaskEvent(
         .join("")}</div>`
     : "";
   const emailHtml = `<!doctype html><html><body style="margin:0;background:#f4f7fa;font-family:Arial,sans-serif;color:#1d2c35"><div style="display:none;max-height:0;overflow:hidden">${escape(notificationBody)}</div><div style="max-width:680px;margin:0 auto;padding:24px 12px"><div style="background:#15344b;padding:22px 28px;color:#fff"><strong style="font-size:20px">Opsora</strong><span style="float:right;background:#3156e8;border-radius:999px;padding:7px 12px;font-size:12px">${escape(formatWorkStatus(task.status))}</span></div><div style="background:#fff;border:1px solid #dce4eb;border-top:0;border-radius:0 0 16px 16px;padding:30px"><div style="text-transform:uppercase;letter-spacing:2px;color:#678584;font-size:12px;font-weight:bold">Task workflow update</div><h1 style="font-size:28px;color:#16344c;margin:10px 0">${escape(notificationTitle)}</h1><p style="font-size:16px;line-height:1.6">${escape(notificationBody)}</p><table role="presentation" style="width:100%;border-collapse:collapse;margin:24px 0">${detailRows.map(([label, value]) => `<tr><td style="width:34%;padding:10px;border-bottom:1px solid #e4eaef;color:#60717d;font-size:12px;text-transform:uppercase">${escape(label)}</td><td style="padding:10px;border-bottom:1px solid #e4eaef;font-weight:600">${escape(value)}</td></tr>`).join("")}</table><h2 style="font-size:18px;color:#16344c;margin:28px 0 10px">Latest discussion</h2><div style="border-left:4px solid #168b83;background:#f5faf9;padding:14px 16px;line-height:1.6">${escape(latestRemark ?? body)}</div><h2 style="font-size:18px;color:#16344c;margin:28px 0 10px">Workflow timeline</h2><table role="presentation" style="width:100%;border-collapse:collapse"><tr style="background:#15344b;color:#fff"><th style="padding:9px;text-align:left">Status</th><th style="padding:9px;text-align:left">User</th><th style="padding:9px;text-align:left">Time</th></tr>${(
-    history ?? []
+    (history ?? []).filter(
+      (event) => !["acknowledged", "accepted"].includes(event.new_status),
+    )
   )
     .slice(-8)
     .map(

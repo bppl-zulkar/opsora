@@ -11,6 +11,10 @@ const safe = (value: unknown) => {
 };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const person = (value: any) => value?.full_name ?? "—";
+const visibleLifecycle = (history: TaskRow[]) =>
+  history.filter(
+    (event) => !["acknowledged", "accepted"].includes(event.new_status),
+  );
 export async function taskExcel(tasks: TaskRow[], title = "Task report") {
   const wb = new ExcelJS.Workbook();
   wb.creator = "Opsora";
@@ -36,7 +40,6 @@ export async function taskExcel(tasks: TaskRow[], title = "Task report") {
     "Department",
     "Created",
     "Deadline",
-    "Acknowledged",
     "Started",
     "Submitted",
     "Closed",
@@ -53,24 +56,23 @@ export async function taskExcel(tasks: TaskRow[], title = "Task report") {
     details.addRow([
       safe(t.reference),
       safe(t.title),
-      t.status,
+      formatWorkStatus(t.status),
       t.priority,
       person(t.creator),
       person(t.owner),
       t.department?.name ?? "—",
       t.created_at ? formatIST(t.created_at) : "",
       t.current_deadline ? formatIST(t.current_deadline) : "",
-      t.acknowledged_at ? formatIST(t.acknowledged_at) : "",
       t.started_at ? formatIST(t.started_at) : "",
       t.completion_submitted_at ? formatIST(t.completion_submitted_at) : "",
       t.closed_at ? formatIST(t.closed_at) : "",
       t.progress_percentage,
     ]);
   details.views = [{ state: "frozen", ySplit: 1 }];
-  details.autoFilter = { from: "A1", to: "N1" };
+  details.autoFilter = { from: "A1", to: "M1" };
   details.columns.forEach(
     (c, i) =>
-      (c.width = [18, 38, 20, 12, 24, 24, 24, 24, 24, 24, 24, 24, 24, 12][i]),
+      (c.width = [18, 38, 20, 12, 24, 24, 24, 24, 24, 24, 24, 24, 12][i]),
   );
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
@@ -106,7 +108,7 @@ export async function individualTaskExcel(
     ["Reference", task.reference],
     ["Title", task.title],
     ["Description / instructions", task.description],
-    ["Status", String(task.status ?? "").replaceAll("_", " ")],
+    ["Status", formatWorkStatus(String(task.status ?? ""))],
     ["Priority", task.priority],
     ["Progress", `${task.progress_percentage ?? 0}%`],
     ["Created by", person(task.creator)],
@@ -122,11 +124,9 @@ export async function individualTaskExcel(
       task.current_deadline ? formatIST(task.current_deadline) : "—",
     ],
     [
-      "Acknowledged",
-      task.acknowledged_at ? formatIST(task.acknowledged_at) : "—",
+      "Work in Progress started",
+      task.started_at ? formatIST(task.started_at) : "—",
     ],
-    ["Accepted", task.accepted_at ? formatIST(task.accepted_at) : "—"],
-    ["Started", task.started_at ? formatIST(task.started_at) : "—"],
     [
       "Completion submitted",
       task.completion_submitted_at
@@ -152,12 +152,14 @@ export async function individualTaskExcel(
     { header: "Remarks", key: "remarks", width: 65 },
   ];
   styleSheet(lifecycle);
-  history.forEach((event) =>
+  visibleLifecycle(history).forEach((event) =>
     lifecycle.addRow({
       timestamp: event.created_at ? formatIST(event.created_at) : "—",
       user: person(event.actor),
-      previous: event.previous_status ?? "created",
-      next: event.new_status,
+      previous: ["acknowledged", "accepted"].includes(event.previous_status)
+        ? "Assigned"
+        : formatWorkStatus(event.previous_status ?? "created"),
+      next: formatWorkStatus(event.new_status),
       remarks: safe(event.remarks),
     }),
   );
@@ -220,7 +222,6 @@ export function taskCsv(tasks: TaskRow[]) {
     "Department",
     "Created",
     "Deadline",
-    "Acknowledged",
     "Started",
     "Submitted",
     "Closed",
@@ -231,14 +232,13 @@ export function taskCsv(tasks: TaskRow[]) {
     [
       t.reference,
       t.title,
-      t.status,
+      formatWorkStatus(t.status),
       t.priority,
       person(t.creator),
       person(t.owner),
       t.department?.name ?? "",
       t.created_at ? formatIST(t.created_at) : "",
       t.current_deadline ? formatIST(t.current_deadline) : "",
-      t.acknowledged_at ? formatIST(t.acknowledged_at) : "",
       t.started_at ? formatIST(t.started_at) : "",
       t.completion_submitted_at ? formatIST(t.completion_submitted_at) : "",
       t.closed_at ? formatIST(t.closed_at) : "",
@@ -406,7 +406,7 @@ export async function taskPdf(tasks: TaskRow[], title = "Task report") {
     const values = [
       t.reference,
       String(t.title).slice(0, 32),
-      String(t.status).replaceAll("_", " "),
+      formatWorkStatus(String(t.status)),
       t.priority,
       person(t.creator).slice(0, 17),
       person(t.owner).slice(0, 17),
@@ -671,7 +671,7 @@ export async function individualTaskPdf(
   drawRow("Task reference", task.reference);
   drawRow("Title", task.title);
   drawRow("Instructions", task.description);
-  drawRow("Status", String(task.status ?? "—").replaceAll("_", " "));
+  drawRow("Status", formatWorkStatus(String(task.status ?? "—")));
   drawRow("Priority", task.priority);
   drawRow("Progress", `${task.progress_percentage ?? 0}%`);
   drawRow("Created by", person(task.creator));
@@ -681,9 +681,7 @@ export async function individualTaskPdf(
     ["Created", "created_at"],
     ["Original deadline", "original_deadline"],
     ["Current deadline", "current_deadline"],
-    ["Acknowledged", "acknowledged_at"],
-    ["Accepted", "accepted_at"],
-    ["Started", "started_at"],
+    ["Work in Progress started", "started_at"],
     ["Submitted", "completion_submitted_at"],
     ["Approved", "approved_at"],
     ["Closed", "closed_at"],
@@ -692,11 +690,13 @@ export async function individualTaskPdf(
   drawRow("Completion remarks", task.completion_remarks);
 
   drawSection("Lifecycle history");
-  if (!history.length) drawRow("History", "No lifecycle events recorded.");
-  for (const event of history)
+  const displayedHistory = visibleLifecycle(history);
+  if (!displayedHistory.length)
+    drawRow("History", "No lifecycle events recorded.");
+  for (const event of displayedHistory)
     drawRow(
       formatIST(event.created_at),
-      `${event.actor?.full_name ?? "System"}: ${event.previous_status ?? "created"} -> ${event.new_status}${event.remarks ? ` | ${event.remarks}` : ""}`,
+      `${event.actor?.full_name ?? "System"}: ${["acknowledged", "accepted"].includes(event.previous_status) ? "Assigned" : formatWorkStatus(event.previous_status ?? "created")} -> ${formatWorkStatus(event.new_status)}${event.remarks ? ` | ${event.remarks}` : ""}`,
     );
 
   drawSection("Evidence and attachments");

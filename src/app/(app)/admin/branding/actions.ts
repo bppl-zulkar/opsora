@@ -3,13 +3,9 @@ import { requireOrganizationAdmin } from "@/lib/admin-context";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-const color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 const schema = z.object({
   company_name: z.string().min(2).max(160),
   website: z.union([z.literal(""), z.string().url()]),
-  primary_color: color,
-  secondary_color: color,
-  sidebar_color: color,
   theme: z.enum(["light", "dark", "system"]),
   assets: z.string(),
 });
@@ -52,9 +48,6 @@ export async function saveBranding(fd: FormData) {
     const branding = await admin.from("organization_branding").upsert(
       {
         organization_id: organizationId,
-        primary_color: input.primary_color,
-        secondary_color: input.secondary_color,
-        sidebar_color: input.sidebar_color,
         theme: input.theme,
         assets,
         updated_at: new Date().toISOString(),

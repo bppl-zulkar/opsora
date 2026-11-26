@@ -7,11 +7,14 @@ import { MobileSidebarToggle } from "./mobile-sidebar-toggle";
 import { ThemeControls } from "./theme-controls";
 import { AccountMenu } from "./account-menu";
 import { PushSubscriptionSync } from "./push-subscription-sync";
-const nav = [
+import { WorkspaceNavigation } from "./workspace-navigation";
+const primaryNav = [
   ["/dashboard", "ri-dashboard-2-line", "Dashboard"],
   ["/tasks", "ri-task-line", "Tasks"],
   ["/board", "ri-layout-grid-line", "Board"],
   ["/calendar", "ri-calendar-line", "Calendar"],
+] as const;
+const managementNav = [
   ["/activity-logs", "ri-time-line", "Activity logs"],
   ["/notifications", "ri-notification-3-line", "Notifications"],
   ["/reports", "ri-bar-chart-box-line", "Reports"],
@@ -25,7 +28,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
   if (!user) redirect("/login");
   const { data: p } = await s
     .from("profiles")
-    .select("full_name,employee_id,organization_id,is_platform_admin")
+    .select("full_name,employee_id,organization_id,is_platform_admin,notification_preferences")
     .eq("id", user.id)
     .single();
   const admin = createAdminClient();
@@ -44,12 +47,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
     }),
   );
   let companyName = "Company",
-    sidebarLogo: string | undefined,
-    branding: {
-      primary_color?: string;
-      secondary_color?: string;
-      sidebar_color?: string;
-    } | null = null;
+    sidebarLogo: string | undefined;
   if (p?.organization_id) {
     const [{ data: org }, { data: b }] = await Promise.all([
       admin
@@ -59,12 +57,11 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         .single(),
       admin
         .from("organization_branding")
-        .select("primary_color,secondary_color,sidebar_color,assets")
+        .select("assets")
         .eq("organization_id", p.organization_id)
         .maybeSingle(),
     ]);
     companyName = org?.name ?? companyName;
-    branding = b;
     if (b?.assets) {
       const assets = b.assets as Record<string, string>;
       const path = assets.main_logo;
@@ -76,27 +73,43 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
       }
     }
   }
-  const style = {
-    "--brand": branding?.primary_color ?? "#ff5c73",
-    "--brand2": branding?.secondary_color ?? "#6c5ce7",
-    "--sidebar": branding?.sidebar_color ?? "#181a2b",
-  } as React.CSSProperties;
+  const preferences = (p?.notification_preferences ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const background = [
+    "none",
+    "aurora",
+    "wave",
+    "mist",
+    "mesh",
+    "dawn",
+    "midnight",
+  ].includes(String(preferences.background_theme))
+    ? String(preferences.background_theme)
+    : "aurora";
   return (
-    <div className="shell" style={style}>
+    <div className={`shell workspace-bg-${background}`}>
       <PushSubscriptionSync />
       <aside className="sidebar" id="primary-sidebar">
-        <Logo src={sidebarLogo} name={companyName} />
-        <div className="nav-section">Workspace</div>
-        <nav aria-label="Workspace navigation">
-          {nav
-            .filter(([href]) => href !== "/admin" || isAdmin)
-            .map(([href, icon, label]) => (
-              <Link className="side-link" href={href} key={href}>
-                <i className={icon} aria-hidden="true" />
-                <span>{label}</span>
-              </Link>
-            ))}
-        </nav>
+        <div className="sidebar-brand">
+          <Logo src={sidebarLogo} name={companyName} />
+        </div>
+        <WorkspaceNavigation
+          primary={primaryNav}
+          management={managementNav.filter(
+            ([href]) => href !== "/admin" || isAdmin,
+          )}
+        />
+        <div className="sidebar-support">
+          <span className="sidebar-support-icon">
+            <i className="ri-question-line" />
+          </span>
+          <span>
+            <strong>Need help?</strong>
+            <small>Workspace assistance</small>
+          </span>
+        </div>
       </aside>
       <div className="main">
         <header className="topbar">
@@ -105,9 +118,13 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
             <i className="ri-search-line me-2" />
             <span>Search tasks, company users and reports</span>
           </div>
-          <div className="d-flex align-items-center gap-3">
+          <div className="topbar-actions">
             <ThemeControls />
-            <Link href="/notifications" aria-label="Notifications">
+            <Link
+              className="topbar-notification"
+              href="/notifications"
+              aria-label="Notifications"
+            >
               <i className="ri-notification-3-line fs-5" />
             </Link>
             <AccountMenu
@@ -117,7 +134,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
             />
           </div>
         </header>
-        {children}
+        <div className="workspace-content">{children}</div>
         <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
           <Link href="/dashboard">
             <i className="ri-dashboard-2-line" />

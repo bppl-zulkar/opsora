@@ -4,6 +4,8 @@ import { TaskUpdateForm } from "@/components/task-update-form";
 import { getTaskAccess, ownTaskFilter } from "@/lib/task-access";
 import { ReportDownloadButton } from "@/components/report-download-button";
 import Image from "next/image";
+import { deleteTask } from "./actions";
+import { FormSubmitButton } from "@/components/form-submit-button";
 export default async function Task({
   params,
 }: {
@@ -22,7 +24,8 @@ export default async function Task({
     .select(
       "*,creator:profiles!tasks_created_by_fkey(full_name,employee_id),owner:profiles!tasks_primary_owner_id_fkey(full_name,employee_id)",
     )
-    .eq("id", id);
+    .eq("id", id)
+    .is("deleted_at", null);
   if (!isAdmin) taskQuery = taskQuery.or(ownTaskFilter(userId));
   const { data: t } = await taskQuery.single();
   if (!t) notFound();
@@ -31,7 +34,9 @@ export default async function Task({
     .select("*,actor:profiles(full_name)")
     .eq("task_id", id)
     .order("created_at", { ascending: false });
-  const history = historyData ?? [];
+  const history = (historyData ?? []).filter(
+    (event) => !["acknowledged", "accepted"].includes(event.new_status),
+  );
   const { data: attachmentData } = await s
     .from("task_attachments")
     .select("id,file_name,mime_type,file_size,remarks,storage_path,created_at")
@@ -48,12 +53,11 @@ export default async function Task({
   const displayStatus = formatWorkStatus(t.status);
   const wasOnHold = history.some((event) => event.new_status === "on_hold");
   const isOwner = t.primary_owner_id === userId;
-  const canApprove = t.created_by === userId || t.approver_id === userId;
+  const canApprove = t.created_by === userId;
+  const canDelete = t.created_by === userId || isAdmin;
   const nextActions: Array<[string, string]> = [];
-  if (t.status === "assigned" && isOwner)
-    nextActions.push(["acknowledge", "Acknowledge"]);
-  if (["acknowledged", "accepted"].includes(t.status) && isOwner)
-    nextActions.push(["start_wip", "Start WIP"]);
+  if (["assigned", "acknowledged", "accepted"].includes(t.status) && isOwner)
+    nextActions.push(["start_wip", "Start Work in Progress"]);
   if (t.status === "in_progress" && isOwner) {
     nextActions.push(["complete", "Mark completed"]);
     if (!wasOnHold) nextActions.push(["hold", "Put on hold"]);
@@ -85,6 +89,18 @@ export default async function Task({
           >
             Excel
           </ReportDownloadButton>
+          {canDelete && (
+            <form action={deleteTask}>
+              <input type="hidden" name="id" value={id} />
+              <FormSubmitButton
+                className="btn btn-outline-danger"
+                pendingLabel="Deleting task…"
+                confirmMessage={`Delete ${t.reference}? The task will be removed from active views while its audit history is preserved.`}
+              >
+                <i className="ri-delete-bin-line me-1" /> Delete task
+              </FormSubmitButton>
+            </form>
+          )}
         </div>
       </div>
       <div className="row g-3">
