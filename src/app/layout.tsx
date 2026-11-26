@@ -16,7 +16,12 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   icons: { icon: "/opsora-logo.png" },
 };
-export const viewport: Viewport = { themeColor: "#181a2b" };
+export const viewport: Viewport = {
+  themeColor: "#181a2b",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
 export default function RootLayout({
   children,
 }: {

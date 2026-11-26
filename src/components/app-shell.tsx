@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { MobileSidebarToggle } from "./mobile-sidebar-toggle";
 import { ThemeControls } from "./theme-controls";
 import { AccountMenu } from "./account-menu";
+import { PushSubscriptionSync } from "./push-subscription-sync";
 const nav = [
   ["/dashboard", "ri-dashboard-2-line", "Dashboard"],
   ["/tasks", "ri-task-line", "Tasks"],
@@ -82,6 +83,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
   } as React.CSSProperties;
   return (
     <div className="shell" style={style}>
+      <PushSubscriptionSync />
       <aside className="sidebar" id="primary-sidebar">
         <Logo src={sidebarLogo} name={companyName} />
         <div className="nav-section">Workspace</div>

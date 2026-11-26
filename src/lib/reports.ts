@@ -1,7 +1,7 @@
 import "server-only";
 import ExcelJS from "exceljs";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import { formatIST } from "@/lib/format";
+import { formatIST, formatWorkStatus } from "@/lib/format";
 // Report rows combine task data with several Supabase relation shapes.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type TaskRow = Record<string, any>;
@@ -475,7 +475,12 @@ export async function individualTaskPdf(
       .normalize("NFKD")
       .replace(/\p{M}/gu, "")
       .replace(/[^\x20-\x7e\n]/g, "?");
-  const wrap = (value: unknown, font: typeof regular, size: number, width: number) => {
+  const wrap = (
+    value: unknown,
+    font: typeof regular,
+    size: number,
+    width: number,
+  ) => {
     const lines: string[] = [];
     for (const paragraph of pdfText(value).split(/\r?\n/)) {
       let line = "";
@@ -523,13 +528,16 @@ export async function individualTaskPdf(
       font: bold,
       color: rgb(1, 1, 1),
     });
-    page.drawText(firstPage ? "Individual task report" : "Task report - continued", {
-      x: left,
-      y: 783,
-      size: 12,
-      font: bold,
-      color: rgb(0.62, 0.75, 1),
-    });
+    page.drawText(
+      firstPage ? "Individual task report" : "Task report - continued",
+      {
+        x: left,
+        y: 783,
+        size: 12,
+        font: bold,
+        color: rgb(0.62, 0.75, 1),
+      },
+    );
     page.drawText(pdfText(task.reference), {
       x: 365,
       y: 811,
@@ -595,21 +603,17 @@ export async function individualTaskPdf(
         y: y - rowHeight + 7,
         width: contentWidth,
         height: rowHeight,
-        color:
-          rowIndex % 2 === 0 ? rgb(0.97, 0.975, 0.99) : rgb(0.99, 0.99, 1),
+        color: rowIndex % 2 === 0 ? rgb(0.97, 0.975, 0.99) : rgb(0.99, 0.99, 1),
         borderColor: rgb(0.9, 0.91, 0.95),
         borderWidth: 0.35,
       });
-      page.drawText(
-        pdfText(offset ? `${label} (cont.)` : label),
-        {
-          x: labelX,
-          y,
-          size: 8,
-          font: bold,
-          color: muted,
-        },
-      );
+      page.drawText(pdfText(offset ? `${label} (cont.)` : label), {
+        x: labelX,
+        y,
+        size: 8,
+        font: bold,
+        color: muted,
+      });
       chunk.forEach((part, index) =>
         page.drawText(part, {
           x: valueX,
@@ -627,6 +631,42 @@ export async function individualTaskPdf(
   };
 
   drawPageHeader(true);
+  ensureSpace(66);
+  page.drawRectangle({
+    x: left,
+    y: y - 48,
+    width: contentWidth,
+    height: 54,
+    color: rgb(0.91, 0.97, 0.95),
+    borderColor: rgb(0.76, 0.88, 0.84),
+    borderWidth: 0.6,
+  });
+  const summary = [
+    ["CURRENT STATUS", formatWorkStatus(String(task.status ?? ""))],
+    ["ASSIGNED TO", person(task.owner)],
+    [
+      "DEADLINE",
+      task.current_deadline ? formatIST(task.current_deadline) : "—",
+    ],
+  ];
+  summary.forEach(([label, value], index) => {
+    const x = left + 14 + index * 171;
+    page.drawText(pdfText(label), {
+      x,
+      y: y - 12,
+      size: 6.5,
+      font: bold,
+      color: muted,
+    });
+    page.drawText(pdfText(value).slice(0, 29), {
+      x,
+      y: y - 31,
+      size: 8,
+      font: bold,
+      color: navy,
+    });
+  });
+  y -= 66;
   drawSection("Task overview");
   drawRow("Task reference", task.reference);
   drawRow("Title", task.title);
@@ -699,13 +739,18 @@ export async function individualTaskPdf(
     const extension = String(item.file_name ?? "")
       .match(/\.([^.]+)$/)?.[1]
       ?.toLowerCase();
-    return mimeType.startsWith("image/") || photoExtensions.has(extension ?? "");
+    return (
+      mimeType.startsWith("image/") || photoExtensions.has(extension ?? "")
+    );
   });
   if (!photos.length) drawRow("Photos", "No photo files attached.");
   for (const item of photos) {
     ensureSpace(300);
     drawRow("File", item.file_name ?? "Unnamed photo");
-    drawRow("Uploaded", item.created_at ? formatIST(item.created_at) : "Date unavailable");
+    drawRow(
+      "Uploaded",
+      item.created_at ? formatIST(item.created_at) : "Date unavailable",
+    );
     drawRow("Format", item.mime_type ?? "Unknown image format");
     drawRow("File size", `${item.file_size ?? "Unknown"} bytes`);
     if (item.remarks) drawRow("Remarks", item.remarks);
@@ -717,8 +762,10 @@ export async function individualTaskPdf(
     if (!failure && bytes?.length) {
       try {
         if (photoFormat === "image/png") image = await pdf.embedPng(bytes);
-        else if (photoFormat === "image/jpeg") image = await pdf.embedJpg(bytes);
-        else failure = "Photo was not converted to a PDF-compatible JPEG or PNG.";
+        else if (photoFormat === "image/jpeg")
+          image = await pdf.embedJpg(bytes);
+        else
+          failure = "Photo was not converted to a PDF-compatible JPEG or PNG.";
       } catch {
         failure = "Image embedding failed after conversion to JPEG or PNG.";
       }
@@ -760,6 +807,16 @@ export async function individualTaskPdf(
       formatIST(comment.created_at),
       `${comment.author?.full_name ?? "System"}: ${comment.body}`,
     );
+
+  drawSection("Final sign-off");
+  drawRow("Task creator", person(task.creator));
+  drawRow("Accountable owner", person(task.owner));
+  drawRow("Approver", person(task.approver));
+  drawRow("Final status", formatWorkStatus(String(task.status ?? "—")));
+  drawRow(
+    "Closed at",
+    task.closed_at ? formatIST(task.closed_at) : "Pending final closure",
+  );
 
   const pages = pdf.getPages();
   pages.forEach((p, i) =>

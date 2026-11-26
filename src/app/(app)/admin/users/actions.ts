@@ -1,5 +1,6 @@
 "use server";
 import { requireOrganizationAdmin } from "@/lib/admin-context";
+import { writeAudit } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -175,36 +176,104 @@ export async function deactivateEmployee(fd: FormData) {
 }
 
 export async function deleteEmployee(fd: FormData) {
-  const id = z.string().uuid().parse(fd.get("id"));
-  const { admin, organizationId, actorId } = await requireOrganizationAdmin();
-  if (id === actorId) throw new Error("You cannot delete your own account");
-  const counts = await Promise.all([
-    admin
-      .from("tasks")
-      .select("id", { count: "exact", head: true })
-      .eq("organization_id", organizationId)
-      .eq("created_by", id),
-    admin
-      .from("tasks")
-      .select("id", { count: "exact", head: true })
-      .eq("organization_id", organizationId)
-      .eq("primary_owner_id", id),
-    admin
-      .from("task_comments")
-      .select("id", { count: "exact", head: true })
-      .eq("organization_id", organizationId)
-      .eq("author_id", id),
-  ]);
-  if (counts.some((x) => (x.count ?? 0) > 0)) {
-    await admin
+  try {
+    const id = z.string().uuid().parse(fd.get("id"));
+    const { admin, organizationId, actorId } =
+      await requireOrganizationAdmin();
+    if (id === actorId) throw new Error("You cannot delete your own account");
+
+    const { data: profile, error: profileError } = await admin
       .from("profiles")
-      .update({ account_status: "inactive" })
+      .select("id,full_name,email,employee_id,account_status,deleted_at")
+      .eq("id", id)
+      .eq("organization_id", organizationId)
+      .is("deleted_at", null)
+      .single();
+    if (profileError || !profile) throw new Error("Company user not found");
+
+    const deletedAt = new Date().toISOString();
+    const tombstone = id.replaceAll("-", "");
+
+    // Keep the profile row so historical tasks, discussions and audit records
+    // retain their author, while removing it from every active relationship.
+    const cleanupResults = await Promise.all([
+      admin
+        .from("profiles")
+        .update({ reporting_manager_id: null })
+        .eq("organization_id", organizationId)
+        .eq("reporting_manager_id", id),
+      admin
+        .from("departments")
+        .update({ head_id: null })
+        .eq("organization_id", organizationId)
+        .eq("head_id", id),
+      admin
+        .from("departments")
+        .update({ reporting_manager_id: null })
+        .eq("organization_id", organizationId)
+        .eq("reporting_manager_id", id),
+      admin
+        .from("departments")
+        .update({ coordinator_id: null })
+        .eq("organization_id", organizationId)
+        .eq("coordinator_id", id),
+      admin
+        .from("organization_memberships")
+        .delete()
+        .eq("organization_id", organizationId)
+        .eq("user_id", id),
+      admin
+        .from("user_roles")
+        .delete()
+        .eq("organization_id", organizationId)
+        .eq("user_id", id),
+      admin
+        .from("user_permission_overrides")
+        .delete()
+        .eq("organization_id", organizationId)
+        .eq("user_id", id),
+    ]);
+    const cleanupError = cleanupResults.find((result) => result.error)?.error;
+    if (cleanupError) throw cleanupError;
+
+    const { error: updateError } = await admin
+      .from("profiles")
+      .update({
+        account_status: "inactive",
+        deleted_at: deletedAt,
+        email: `deleted+${tombstone}@invalid.opsora.local`,
+        employee_id: `DELETED-${tombstone}`,
+        mobile: null,
+        department_id: null,
+        designation_id: null,
+        reporting_manager_id: null,
+        notification_preferences: { in_app: false, email: false, push: false },
+        updated_at: deletedAt,
+      })
       .eq("id", id)
       .eq("organization_id", organizationId);
-    await admin.auth.admin.updateUserById(id, { ban_duration: "876000h" });
-  } else {
-    const removed = await admin.auth.admin.deleteUser(id);
+    if (updateError) throw updateError;
+
+    // Supabase soft deletion revokes authentication without cascading away the
+    // profile row required by immutable operational history.
+    const removed = await admin.auth.admin.deleteUser(id, true);
     if (removed.error) throw removed.error;
+
+    await writeAudit(admin, {
+      organizationId,
+      actorId,
+      action: "company_user.deleted",
+      entityType: "profile",
+      entityId: id,
+      previous: profile,
+      next: { account_status: "inactive", deleted_at: deletedAt },
+      reason: "Deleted by an organization administrator",
+    });
+    revalidatePath("/admin/users");
+  } catch (error) {
+    redirect(
+      `/admin/users?error=${encodeURIComponent(error instanceof Error ? error.message : "Unable to delete company user")}`,
+    );
   }
-  revalidatePath("/admin/users");
+  redirect("/admin/users?success=Company%20user%20deleted");
 }

@@ -2,6 +2,8 @@ import { notFound, redirect } from "next/navigation";
 import { formatIST, formatWorkStatus } from "@/lib/format";
 import { TaskUpdateForm } from "@/components/task-update-form";
 import { getTaskAccess, ownTaskFilter } from "@/lib/task-access";
+import { ReportDownloadButton } from "@/components/report-download-button";
+import Image from "next/image";
 export default async function Task({
   params,
 }: {
@@ -32,9 +34,7 @@ export default async function Task({
   const history = historyData ?? [];
   const { data: attachmentData } = await s
     .from("task_attachments")
-    .select(
-      "id,file_name,mime_type,file_size,remarks,storage_path,created_at",
-    )
+    .select("id,file_name,mime_type,file_size,remarks,storage_path,created_at")
     .eq("task_id", id)
     .order("created_at", { ascending: false });
   const attachments = await Promise.all(
@@ -71,20 +71,20 @@ export default async function Task({
           <span className="status">{displayStatus}</span>
         </div>
         <div className="d-flex flex-wrap gap-2 justify-content-end">
-          <a
-            className="btn btn-outline-primary"
+          <ReportDownloadButton
             href={`/api/reports/tasks/${id}?format=pdf`}
+            className="btn btn-outline-primary"
+            icon="ri-file-pdf-2-line"
           >
-            <i className="ri-file-pdf-2-line me-1" />
             Task PDF
-          </a>
-          <a
-            className="btn btn-outline-secondary"
+          </ReportDownloadButton>
+          <ReportDownloadButton
             href={`/api/reports/tasks/${id}?format=xlsx`}
+            className="btn btn-outline-secondary"
+            icon="ri-file-excel-2-line"
           >
-            <i className="ri-file-excel-2-line me-1" />
             Excel
-          </a>
+          </ReportDownloadButton>
         </div>
       </div>
       <div className="row g-3">
@@ -96,15 +96,31 @@ export default async function Task({
             <h2 className="h5">Uploaded files and photos</h2>
             {attachments.map((a) => (
               <div
-                className="d-flex justify-content-between border-bottom py-2"
+                className="evidence-file-row d-flex justify-content-between align-items-center gap-3 border-bottom py-3"
                 key={a.id}
               >
-                <div>
-                  <strong>{a.file_name}</strong>
-                  <small className="d-block text-secondary">
-                    {(a.file_size / 1024 / 1024).toFixed(2)} MB
-                    {a.remarks && ` · ${a.remarks}`}
-                  </small>
+                <div className="d-flex align-items-center gap-3 min-w-0">
+                  {a.signedUrl && a.mime_type?.startsWith("image/") ? (
+                    <Image
+                      src={a.signedUrl}
+                      alt={a.file_name}
+                      width={96}
+                      height={72}
+                      className="evidence-thumbnail"
+                      unoptimized
+                    />
+                  ) : (
+                    <span className="evidence-file-icon">
+                      <i className="ri-file-line" aria-hidden="true" />
+                    </span>
+                  )}
+                  <div className="min-w-0">
+                    <strong>{a.file_name}</strong>
+                    <small className="d-block text-secondary">
+                      {(a.file_size / 1024 / 1024).toFixed(2)} MB
+                      {a.remarks && ` · ${a.remarks}`}
+                    </small>
+                  </div>
                 </div>
                 {a.signedUrl && (
                   <a
@@ -119,7 +135,9 @@ export default async function Task({
               </div>
             ))}
             {!attachments.length && (
-              <p className="text-secondary mb-0">No files or photos uploaded yet.</p>
+              <p className="text-secondary mb-0">
+                No files or photos uploaded yet.
+              </p>
             )}
           </section>
           <section className="panel p-4 mb-3">

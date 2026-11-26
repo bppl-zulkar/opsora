@@ -1,6 +1,7 @@
 import { getTaskAccess, ownTaskFilter } from "@/lib/task-access";
 import { formatIST, formatWorkStatus } from "@/lib/format";
 import Link from "next/link";
+import { ReportDownloadButton } from "@/components/report-download-button";
 type Filters = {
   from?: string;
   to?: string;
@@ -72,17 +73,22 @@ export default async function Reports({
           </p>
         </div>
         <div className="d-flex flex-wrap gap-2">
-          <a href={link("pdf")} className="btn btn-primary">
-            <i className="ri-file-pdf-2-line me-1" />
+          <ReportDownloadButton href={link("pdf")} icon="ri-file-pdf-2-line">
             Download PDF
-          </a>
-          <a href={link("xlsx")} className="btn btn-outline-primary">
-            <i className="ri-file-excel-2-line me-1" />
+          </ReportDownloadButton>
+          <ReportDownloadButton
+            href={link("xlsx")}
+            className="btn btn-outline-primary"
+            icon="ri-file-excel-2-line"
+          >
             Download Excel
-          </a>
-          <a href={link("csv")} className="btn btn-outline-secondary">
+          </ReportDownloadButton>
+          <ReportDownloadButton
+            href={link("csv")}
+            className="btn btn-outline-secondary"
+          >
             CSV
-          </a>
+          </ReportDownloadButton>
         </div>
       </div>
       <form className="panel p-4 mb-3">
@@ -252,18 +258,18 @@ export default async function Reports({
                   <td>{formatIST(t.current_deadline)}</td>
                   <td>
                     <div className="d-flex gap-1">
-                      <a
-                        className="btn btn-sm btn-outline-primary"
+                      <ReportDownloadButton
                         href={`/api/reports/tasks/${t.id}?format=pdf`}
+                        className="btn btn-sm btn-outline-primary"
                       >
                         PDF
-                      </a>
-                      <a
-                        className="btn btn-sm btn-outline-secondary"
+                      </ReportDownloadButton>
+                      <ReportDownloadButton
                         href={`/api/reports/tasks/${t.id}?format=xlsx`}
+                        className="btn btn-sm btn-outline-secondary"
                       >
                         Excel
-                      </a>
+                      </ReportDownloadButton>
                     </div>
                   </td>
                 </tr>

@@ -33,6 +33,15 @@ const initial: Record<PermissionKey, PermissionState> = {
   camera: "pending",
 };
 
+function isMobileOrTablet() {
+  const standardMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(
+    navigator.userAgent,
+  );
+  const iPadDesktopMode =
+    navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+  return standardMobile || iPadDesktopMode;
+}
+
 function applicationServerKey(value: string) {
   const padding = "=".repeat((4 - (value.length % 4)) % 4);
   const base64 = (value + padding).replaceAll("-", "+").replaceAll("_", "/");
@@ -47,7 +56,10 @@ export function PermissionGate() {
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
-      if (localStorage.getItem("opsora-permissions-onboarded") !== "yes")
+      if (
+        isMobileOrTablet() &&
+        localStorage.getItem("opsora-permissions-onboarded") !== "yes"
+      )
         setOpen(true);
     });
     return () => cancelAnimationFrame(frame);
@@ -63,29 +75,28 @@ export function PermissionGate() {
       next.notifications = result === "granted" ? "granted" : "denied";
       if (result === "granted" && "serviceWorker" in navigator) {
         try {
-          const configuration = await fetch("/api/push/configuration").then(
-            (response) => response.json(),
-          );
-          if (configuration.enabled && configuration.publicKey) {
-            const registration = await navigator.serviceWorker.ready;
-            const existing = await registration.pushManager.getSubscription();
-            const subscription =
-              existing ??
-              (await registration.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: applicationServerKey(
-                  configuration.publicKey,
-                ),
-              }));
-            await fetch("/api/push/subscriptions", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(subscription),
-            });
+          const response = await fetch("/api/push/configuration");
+          if (response.ok) {
+            const configuration = await response.json();
+            if (configuration.enabled && configuration.publicKey) {
+              const registration = await navigator.serviceWorker.ready;
+              const existing = await registration.pushManager.getSubscription();
+              const subscription =
+                existing ??
+                (await registration.pushManager.subscribe({
+                  userVisibleOnly: true,
+                  applicationServerKey: applicationServerKey(
+                    configuration.publicKey,
+                  ),
+                }));
+              await fetch("/api/push/subscriptions", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(subscription),
+              });
+            }
           }
-        } catch {
-          next.notifications = "denied";
-        }
+        } catch {}
       }
     } else next.notifications = "unsupported";
 

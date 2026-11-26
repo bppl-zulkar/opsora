@@ -13,7 +13,7 @@ export async function GET(
   let taskQuery = s
     .from("tasks")
     .select(
-      "*,creator:profiles!tasks_created_by_fkey(full_name,employee_id),owner:profiles!tasks_primary_owner_id_fkey(full_name,employee_id),department:departments!tasks_assigned_department_id_fkey(name)",
+      "*,creator:profiles!tasks_created_by_fkey(full_name,employee_id),owner:profiles!tasks_primary_owner_id_fkey(full_name,employee_id),approver:profiles!tasks_approver_id_fkey(full_name,employee_id),department:departments!tasks_assigned_department_id_fkey(name)",
     )
     .eq("id", id);
   if (!isAdmin) taskQuery = taskQuery.or(ownTaskFilter(userId));
@@ -80,19 +80,18 @@ export async function GET(
       if (downloadError || !data) {
         reportAttachments.push({
           ...attachment,
-          photoError: "Unable to retrieve photo from private task evidence storage.",
+          photoError:
+            "Unable to retrieve photo from private task evidence storage.",
         });
       } else {
         const input = new Uint8Array(await data.arrayBuffer());
         try {
-          const pipeline = sharp(input, { failOn: "error" })
-            .rotate()
-            .resize({
-              width: 2400,
-              height: 2400,
-              fit: "inside",
-              withoutEnlargement: true,
-            });
+          const pipeline = sharp(input, { failOn: "error" }).rotate().resize({
+            width: 2400,
+            height: 2400,
+            fit: "inside",
+            withoutEnlargement: true,
+          });
           const metadata = await pipeline.metadata();
           const photoFormat = metadata.hasAlpha ? "image/png" : "image/jpeg";
           const photoBytes = metadata.hasAlpha
@@ -114,7 +113,8 @@ export async function GET(
     } catch {
       reportAttachments.push({
         ...attachment,
-        photoError: "Unable to retrieve photo from private task evidence storage.",
+        photoError:
+          "Unable to retrieve photo from private task evidence storage.",
       });
     }
   }

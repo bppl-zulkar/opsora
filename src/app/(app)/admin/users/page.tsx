@@ -22,6 +22,7 @@ export default async function Users({
         "id,employee_id,full_name,email,mobile,account_status,department:departments!profiles_department_id_fkey(name),designation:designations!profiles_designation_id_fkey(name)",
       )
       .eq("organization_id", organizationId)
+      .is("deleted_at", null)
       .order("full_name"),
     admin
       .from("departments")
@@ -208,6 +209,7 @@ export default async function Users({
                           <FormSubmitButton
                             className="btn btn-sm btn-outline-danger"
                             pendingLabel="Deleting…"
+                            confirmMessage={`Delete ${u.full_name}? Their login will be revoked, while historical task records will be preserved.`}
                           >
                             Delete
                           </FormSubmitButton>
