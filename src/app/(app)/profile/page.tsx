@@ -5,6 +5,7 @@ import { changeOwnPassword, updateProfile } from "./actions";
 import { formatIST } from "@/lib/format";
 import { FormSubmitButton } from "@/components/form-submit-button";
 import { PasswordInput } from "@/components/password-input";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export default async function Profile({
   searchParams,
@@ -17,22 +18,30 @@ export default async function Profile({
     data: { user },
   } = await s.auth.getUser();
   if (!user) redirect("/login");
-  const { data: profile } = await s
+  const admin = createAdminClient();
+  const { data: profile, error: profileError } = await admin
     .from("profiles")
     .select(
-      "*,department:departments!profiles_department_id_fkey(name),designation:designations!profiles_designation_id_fkey(name),manager:profiles!profiles_reporting_manager_id_fkey(full_name)",
+      "*,department:departments!profiles_department_id_fkey(name),designation:designations!profiles_designation_id_fkey(name)",
     )
     .eq("id", user.id)
-    .single();
+    .maybeSingle();
   if (!profile)
     return (
       <main className="page">
-        <div className="alert alert-danger">Profile is not configured.</div>
+        <div className="alert alert-danger">
+          {profileError
+            ? "Your profile could not be loaded. Please try again."
+            : "Profile is not configured."}
+        </div>
       </main>
     );
-  const [{ data: organization }, { data: roleRows }] = await Promise.all([
-    s.from("organizations").select("name").eq("id", profile.organization_id).maybeSingle(),
-    s.from("user_roles").select("roles(name)").eq("user_id", user.id),
+  const [{ data: organization }, { data: roleRows }, { data: manager }] = await Promise.all([
+    admin.from("organizations").select("name").eq("id", profile.organization_id).maybeSingle(),
+    admin.from("user_roles").select("roles(name)").eq("user_id", user.id),
+    profile.reporting_manager_id
+      ? admin.from("profiles").select("full_name").eq("id", profile.reporting_manager_id).maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
   const edit = query.edit === "1";
   const preferences = (profile.notification_preferences ?? {}) as Record<
@@ -95,6 +104,32 @@ export default async function Profile({
             <div><h2>Personal information</h2><p>Update the details people use to identify and contact you.</p></div>
           </div>
           <div className="row g-3">
+            <div className="col-md-6">
+              <label className="form-label" htmlFor="profile_employee_id">Employee ID</label>
+              <input
+                id="profile_employee_id"
+                className="form-control"
+                value={profile.employee_id ?? "—"}
+                readOnly
+                aria-describedby="profile-identity-help"
+              />
+            </div>
+            <div className="col-md-6">
+              <label className="form-label" htmlFor="profile_email">Email</label>
+              <input
+                id="profile_email"
+                className="form-control"
+                type="email"
+                value={profile.email}
+                readOnly
+                aria-describedby="profile-identity-help"
+              />
+            </div>
+            <div className="col-12">
+              <small id="profile-identity-help" className="form-text text-secondary">
+                Email and employee ID are managed by your organization and cannot be changed here.
+              </small>
+            </div>
             <div className="col-md-6">
               <label className="form-label">Full name</label>
               <input
@@ -214,7 +249,7 @@ export default async function Profile({
             <div className="profile-section-heading compact"><span className="profile-section-icon"><i className="ri-user-settings-line" /></span><div><h2>Account information</h2><p>Your personal and account details.</p></div></div>
             <dl>
               <dt>Employee ID</dt>
-              <dd>{profile.employee_id}</dd>
+              <dd>{profile.employee_id ?? "—"}</dd>
               <dt>Email</dt>
               <dd>{profile.email}</dd>
               <dt>Mobile</dt>
@@ -237,7 +272,7 @@ export default async function Profile({
               <dt>Designation</dt>
               <dd>{profile.designation?.name ?? "—"}</dd>
               <dt>Reporting manager</dt>
-              <dd>{profile.manager?.full_name ?? "—"}</dd>
+              <dd>{manager?.full_name ?? "—"}</dd>
               <dt>Joined</dt>
               <dd>{profile.joined_on ? formatIST(profile.joined_on) : "—"}</dd>
               <dt>Roles</dt>
