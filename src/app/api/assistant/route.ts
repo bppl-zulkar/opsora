@@ -64,6 +64,17 @@ export async function POST(request: Request) {
     .filter((entry) => entry.score > 0)
     .sort((a, b) => b.score - a.score)[0];
 
+  const assistantGuidance = "I can help with your Opsora task records. Ask about open, overdue, completed, in-progress, or assigned tasks.";
+  if (/^(?:hi|hello|hey|good morning|good afternoon|good evening)(?: opsora)?[.!?]*$/.test(message)) {
+    return NextResponse.json({ answer: `Hello ${profile.full_name}. ${assistantGuidance}`, results: [] });
+  }
+  if (/^(?:help|what can you do|what can i ask|what can you help me with)\??$/.test(message)) {
+    return NextResponse.json({ answer: assistantGuidance, results: [] });
+  }
+  if (!person && !/\b(?:task|tasks|work|assigned|deadline|due|overdue|late|completed|finished|finish|done|closed|on hold|progress|working|open|pending|active|created|how many|count|number of)\b/.test(message)) {
+    return NextResponse.json({ answer: assistantGuidance, results: [] });
+  }
+
   let filtered = tasks ?? [];
   let subject = "you";
   if (person) {

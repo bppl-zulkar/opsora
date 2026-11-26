@@ -10,7 +10,8 @@ type TaskResult = {
   latestUpdate?: { status: string; remarks?: string | null; createdAt: string; actor: string } | null;
 };
 type ChatMessage = { role: "user" | "assistant"; text: string; results?: TaskResult[] };
-type SpeechRecognitionEventLike = { results: ArrayLike<{ 0: { transcript: string } }>; resultIndex?: number };
+type SpeechRecognitionResultLike = { 0: { transcript: string }; isFinal?: boolean };
+type SpeechRecognitionEventLike = { results: ArrayLike<SpeechRecognitionResultLike>; resultIndex?: number };
 type SpeechRecognitionErrorLike = { error: string };
 type SpeechRecognitionLike = {
   lang: string;
@@ -26,7 +27,7 @@ type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
 const welcome: ChatMessage = {
   role: "assistant",
-  text: "Hello. I’m your Opsora assistant. In Live commands, allow microphone access and say “Hey Opsora” followed by a question about your tasks.",
+  text: "Hello. I’m your Opsora assistant. Ask me about your tasks, or say “Hey Opsora” before your question.",
 };
 
 export function VoiceTaskAssistant() {
@@ -37,6 +38,7 @@ export function VoiceTaskAssistant() {
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
   const [awaitingWakeWord, setAwaitingWakeWord] = useState(false);
+  const [liveTranscript, setLiveTranscript] = useState("");
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const voiceModeRef = useRef(false);
   const wakeWordModeRef = useRef(false);
@@ -44,7 +46,7 @@ export function VoiceTaskAssistant() {
   const messagesRef = useRef(messages);
   const endRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { messagesRef.current = messages; endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  useEffect(() => { messagesRef.current = messages; endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, liveTranscript]);
   useEffect(() => () => {
     voiceModeRef.current = false;
     recognitionRef.current?.stop();
@@ -52,7 +54,10 @@ export function VoiceTaskAssistant() {
   }, []);
 
   function speak(text: string) {
-    if (!("speechSynthesis" in window)) return false;
+    if (!("speechSynthesis" in window)) {
+      setMessages((current) => [...current, { role: "assistant", text: "Audio replies are not available in this browser, but you can read my written reply above." }]);
+      return false;
+    }
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     const voices = window.speechSynthesis.getVoices();
@@ -64,16 +69,29 @@ export function VoiceTaskAssistant() {
     utterance.rate = .96;
     utterance.pitch = 1.08;
     utterance.onend = () => { if (voiceModeRef.current) startListening(); };
-    window.speechSynthesis.speak(utterance);
+    utterance.onerror = (event) => {
+      if (!voiceModeRef.current || event.error === "canceled" || event.error === "interrupted") return;
+      setMessages((current) => [...current, { role: "assistant", text: "I couldn’t play the audio reply. The written answer is still available above." }]);
+      window.setTimeout(() => startListening(), 250);
+    };
+    try {
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      setMessages((current) => [...current, { role: "assistant", text: "I couldn’t play the audio reply. The written answer is still available above." }]);
+      return false;
+    }
     return true;
   }
 
-  async function ask(question: string) {
+  async function ask(question: string, spokenText = question) {
     const clean = question.trim();
     if (!clean || busyRef.current) return;
+    recognitionRef.current?.stop();
+    setListening(false);
+    setLiveTranscript("");
     const history = messagesRef.current.slice(-8);
     let answerToSpeak = "";
-    setMessages((current) => [...current, { role: "user", text: clean }]);
+    setMessages((current) => [...current, { role: "user", text: spokenText.trim() }]);
     setInput("");
     busyRef.current = true;
     setBusy(true);
@@ -99,6 +117,7 @@ export function VoiceTaskAssistant() {
 
   function startListening() {
     if (busyRef.current || !voiceModeRef.current) return;
+    setLiveTranscript("");
     const browserWindow = window as typeof window & { SpeechRecognition?: SpeechRecognitionConstructor; webkitSpeechRecognition?: SpeechRecognitionConstructor };
     const Recognition = browserWindow.SpeechRecognition ?? browserWindow.webkitSpeechRecognition;
     if (!Recognition) {
@@ -112,29 +131,56 @@ export function VoiceTaskAssistant() {
     const recognition = new Recognition();
     recognition.lang = "en-US";
     recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.onresult = (event) => {
-      const transcript = event.results[event.resultIndex ?? event.results.length - 1]?.[0]?.transcript?.trim() ?? "";
-      if (!transcript) return;
+    recognition.interimResults = true;
+    let latestTranscript = "";
+    let transcriptHandled = false;
+    const handleTranscript = (transcript: string) => {
+      const cleanTranscript = transcript.trim();
+      if (!cleanTranscript) return;
+      setLiveTranscript("");
       setListening(false);
       if (wakeWordModeRef.current) {
-        const wakeMatch = transcript.match(/^(?:hey\s+)?opsora\b[\s,.:;!?-]*(.*)$/i);
-        if (!wakeMatch) return;
         wakeWordModeRef.current = false;
         setAwaitingWakeWord(false);
-        const question = wakeMatch[1].trim();
+        const wakeMatch = cleanTranscript.match(/^(?:(?:hey|hi)[\s,]+)?opsora\b[\s,.:;!?-]*(.*)$/i);
+        const question = wakeMatch ? wakeMatch[1].trim() : cleanTranscript;
         if (!question) {
-          setMessages((current) => [...current, { role: "assistant", text: "I’m listening. What would you like to know about your tasks?" }]);
-          if (!speak("I’m listening. What would you like to know about your tasks?")) startListening();
+          const answer = "I’m here. Ask me about your open, overdue, completed, or assigned tasks.";
+          setMessages((current) => [...current, { role: "user", text: cleanTranscript }, { role: "assistant", text: answer }]);
+          if (voiceModeRef.current && !speak(answer)) startListening();
           return;
         }
-        void ask(question);
+        void ask(question, cleanTranscript);
         return;
       }
-      void ask(transcript);
+      void ask(cleanTranscript);
+    };
+    recognition.onresult = (event) => {
+      let interim = "";
+      let final = "";
+      const startIndex = event.resultIndex ?? 0;
+      for (let index = startIndex; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        const text = result?.[0]?.transcript?.trim() ?? "";
+        if (!text) continue;
+        if (result.isFinal === false) interim = text;
+        else final = text;
+      }
+      if (final && !transcriptHandled) {
+        latestTranscript = final;
+        transcriptHandled = true;
+        handleTranscript(final);
+      } else if (interim) {
+        latestTranscript = interim;
+        setLiveTranscript(interim);
+      }
     };
     recognition.onend = () => {
       setListening(false);
+      if (!transcriptHandled && latestTranscript && voiceModeRef.current) {
+        transcriptHandled = true;
+        handleTranscript(latestTranscript);
+      }
       if (voiceModeRef.current && !busyRef.current && !window.speechSynthesis?.speaking) {
         window.setTimeout(() => startListening(), 250);
       }
@@ -171,6 +217,7 @@ export function VoiceTaskAssistant() {
       voiceModeRef.current = false;
       wakeWordModeRef.current = false;
       setAwaitingWakeWord(false);
+      setLiveTranscript("");
       return;
     }
     voiceModeRef.current = true;
@@ -195,6 +242,7 @@ export function VoiceTaskAssistant() {
     wakeWordModeRef.current = false;
     setListening(false);
     setAwaitingWakeWord(false);
+    setLiveTranscript("");
     setFullScreen(false);
     setOpen(false);
   }
@@ -207,7 +255,7 @@ export function VoiceTaskAssistant() {
         <section className="voice-assistant-panel" aria-label="Opsora voice assistant">
           <header>
             <div className="jarvis-orb"><span /></div>
-            <div><strong>Opsora Assistant</strong><small>{listening ? awaitingWakeWord ? "Listening for “Hey Opsora”…" : "Listening in English…" : busy ? "Checking live tasks…" : "Online · Task aware"}</small></div>
+            <div><strong>Opsora Assistant</strong><small>{listening ? awaitingWakeWord ? "Say “Hey Opsora” or ask a question…" : "Listening in English…" : busy ? "Checking live tasks…" : "Online · Task aware"}</small></div>
             <button type="button" onClick={() => setFullScreen((value) => !value)} aria-label={fullScreen ? "Exit full screen" : "Open full screen"}><i className={fullScreen ? "ri-contract-left-right-line" : "ri-expand-left-right-line"} /></button>
             <button type="button" onClick={closeAssistant} aria-label="Close assistant"><i className="ri-close-line" /></button>
           </header>
@@ -247,6 +295,11 @@ export function VoiceTaskAssistant() {
                 ) : null}
               </div>
             ))}
+            {liveTranscript && (
+              <div className="assistant-response user" aria-live="off">
+                <div className="assistant-message user">{liveTranscript}</div>
+              </div>
+            )}
             {busy && <div className="assistant-message assistant typing"><span /><span /><span /></div>}
             <div ref={endRef} />
           </div>
