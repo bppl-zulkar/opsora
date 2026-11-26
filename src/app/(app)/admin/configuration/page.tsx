@@ -1,6 +1,8 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
-import { saveCommunicationSettings } from "./actions";
+import { requireOrganizationAdmin } from "@/lib/admin-context";
+import {
+  saveCommunicationSettings,
+  sendTestCommunicationEmail,
+} from "./actions";
 import { PasswordInput } from "@/components/password-input";
 import { FormSubmitButton } from "@/components/form-submit-button";
 export default async function Configuration({
@@ -9,31 +11,13 @@ export default async function Configuration({
   searchParams: Promise<{ success?: string; error?: string }>;
 }) {
   const message = await searchParams;
-  const s = await createClient();
-  const {
-    data: { user },
-  } = await s.auth.getUser();
-  if (!user) redirect("/login");
-  const { data: p } = await s
-    .from("profiles")
-    .select("organization_id")
-    .eq("id", user.id)
-    .single();
-  if (!p?.organization_id)
-    return (
-      <main className="page">
-        <div className="alert alert-warning">
-          Assign the platform administrator to an organization or sign in as a
-          Company Admin to configure organization communication.
-        </div>
-      </main>
-    );
-  const { data: c } = await s
+  const { admin, organizationId } = await requireOrganizationAdmin();
+  const { data: c } = await admin
     .from("organization_communication_settings")
     .select(
       "email_provider,email_from_name,email_from_address,email_reply_to,smtp_host,smtp_port,smtp_secure,smtp_user,email_enabled,vapid_public_key,vapid_subject,web_push_enabled",
     )
-    .eq("organization_id", p.organization_id)
+    .eq("organization_id", organizationId)
     .maybeSingle();
   return (
     <main className="page">
@@ -43,41 +27,28 @@ export default async function Configuration({
         files.
       </p>
       {message.success && (
-        <div className="alert alert-success">Configuration saved securely.</div>
+        <div className="alert alert-success">
+          {message.success === "test-email"
+            ? "Test email sent successfully."
+            : "Configuration saved securely."}
+        </div>
       )}
       {message.error && (
         <div className="alert alert-danger">{message.error}</div>
       )}
       <form action={saveCommunicationSettings}>
         <section className="panel p-4 mb-3">
-          <h2 className="h5">Email provider</h2>
+          <div className="d-flex flex-wrap justify-content-between gap-2 mb-3">
+            <div>
+              <h2 className="h5 mb-1">Gmail email notifications</h2>
+              <p className="text-secondary mb-0">
+                Use a Gmail App Password. Your normal Gmail password will not
+                work and is never requested.
+              </p>
+            </div>
+            <span className="status">smtp.gmail.com · TLS · 587</span>
+          </div>
           <div className="row g-3">
-            <div className="col-md-4">
-              <label className="form-label">Provider</label>
-              <select
-                name="email_provider"
-                className="form-select"
-                defaultValue={c?.email_provider ?? "resend"}
-              >
-                <option value="resend">Resend</option>
-                <option value="smtp">SMTP</option>
-              </select>
-            </div>
-            <div className="col-md-8">
-              <label className="form-label">
-                Resend API key{" "}
-                {c && (
-                  <small className="text-secondary">
-                    (leave blank to retain)
-                  </small>
-                )}
-              </label>
-              <PasswordInput
-                name="resend_api_key"
-                autoComplete="new-password"
-                className="form-control"
-              />
-            </div>
             <div className="col-md-4">
               <label className="form-label">From name</label>
               <input
@@ -88,12 +59,13 @@ export default async function Configuration({
               />
             </div>
             <div className="col-md-4">
-              <label className="form-label">From address</label>
+              <label className="form-label">Gmail address</label>
               <input
-                name="email_from_address"
+                name="gmail_address"
                 type="email"
                 className="form-control"
-                defaultValue={c?.email_from_address ?? ""}
+                placeholder="youraccount@gmail.com"
+                defaultValue={c?.smtp_user ?? c?.email_from_address ?? ""}
               />
             </div>
             <div className="col-md-4">
@@ -106,33 +78,8 @@ export default async function Configuration({
               />
             </div>
             <div className="col-md-6">
-              <label className="form-label">SMTP host</label>
-              <input
-                name="smtp_host"
-                className="form-control"
-                defaultValue={c?.smtp_host ?? ""}
-              />
-            </div>
-            <div className="col-md-2">
-              <label className="form-label">Port</label>
-              <input
-                name="smtp_port"
-                type="number"
-                className="form-control"
-                defaultValue={c?.smtp_port ?? 587}
-              />
-            </div>
-            <div className="col-md-4">
-              <label className="form-label">SMTP user</label>
-              <input
-                name="smtp_user"
-                className="form-control"
-                defaultValue={c?.smtp_user ?? ""}
-              />
-            </div>
-            <div className="col-md-6">
               <label className="form-label">
-                SMTP password{" "}
+                Gmail App Password{" "}
                 {c && (
                   <small className="text-secondary">
                     (leave blank to retain)
@@ -140,23 +87,17 @@ export default async function Configuration({
                 )}
               </label>
               <PasswordInput
-                name="smtp_password"
+                name="gmail_app_password"
                 autoComplete="new-password"
                 className="form-control"
+                placeholder="16-character app password"
               />
-            </div>
-            <div className="col-md-3 d-flex align-items-end pb-2">
-              <div className="form-check">
-                <input
-                  name="smtp_secure"
-                  type="checkbox"
-                  className="form-check-input"
-                  defaultChecked={c?.smtp_secure ?? false}
-                />
-                <label className="form-check-label">Implicit TLS</label>
+              <div className="form-text">
+                Create it in Google Account → Security → 2-Step Verification →
+                App passwords.
               </div>
             </div>
-            <div className="col-md-3 d-flex align-items-end pb-2">
+            <div className="col-md-6 d-flex align-items-end pb-2">
               <div className="form-check">
                 <input
                   name="email_enabled"
@@ -220,6 +161,32 @@ export default async function Configuration({
         <FormSubmitButton pendingLabel="Saving configuration…">
           Save encrypted configuration
         </FormSubmitButton>
+      </form>
+      <form action={sendTestCommunicationEmail} className="panel p-4 mt-3">
+        <h2 className="h5">Send a test email</h2>
+        <p className="text-secondary">
+          Save and enable Gmail first, then confirm delivery to any address.
+        </p>
+        <div className="row g-3 align-items-end">
+          <div className="col-md-8">
+            <label className="form-label">Test recipient</label>
+            <input
+              name="recipient"
+              type="email"
+              className="form-control"
+              placeholder="recipient@example.com"
+              required
+            />
+          </div>
+          <div className="col-md-4">
+            <FormSubmitButton
+              className="btn btn-outline-primary w-100"
+              pendingLabel="Sending test…"
+            >
+              Send test email
+            </FormSubmitButton>
+          </div>
+        </div>
       </form>
     </main>
   );
