@@ -7,7 +7,7 @@ import { FormSubmitButton } from "@/components/form-submit-button";
 export default async function Login({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; success?: string }>;
 }) {
   const p = await searchParams;
   const admin = createAdminClient();
@@ -55,6 +55,9 @@ export default async function Login({
             Sign in to your organization workspace.
           </p>
           {p.error && <div className="alert alert-danger">{p.error}</div>}
+          {p.success && (
+            <div className="alert alert-success">{p.success}</div>
+          )}
           <form action={login}>
             <div className="mb-3">
               <label className="form-label">Email or employee ID</label>

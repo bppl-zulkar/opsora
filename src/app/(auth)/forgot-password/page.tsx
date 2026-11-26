@@ -4,7 +4,7 @@ import { FormSubmitButton } from "@/components/form-submit-button";
 export default async function ForgotPassword({
   searchParams,
 }: {
-  searchParams: Promise<{ sent?: string; error?: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
   const p = await searchParams;
   return (
@@ -12,37 +12,46 @@ export default async function ForgotPassword({
       <section className="auth-art">
         <h1 className="display-5 fw-bold">Secure account recovery</h1>
         <p className="lead opacity-75">
-          Reset links are time-limited and delivered only to registered company
-          users.
+          Verify your employee ID and registered email before changing your
+          password.
         </p>
       </section>
       <section className="auth-form">
         <div className="auth-card">
           <h1 className="h3 fw-bold">Forgot password</h1>
-          <p className="text-secondary">Enter your company email address.</p>
-          {p.sent && (
-            <div className="alert alert-success">
-              If the account exists, a reset link has been sent.
-            </div>
-          )}
+          <p className="text-secondary">
+            We will send a six-digit OTP to your registered email address.
+          </p>
           {p.error && (
             <div className="alert alert-danger">
-              Unable to request a reset. Please try again.
+              {p.error}
             </div>
           )}
           <form action={requestReset}>
-            <label className="form-label">Email address</label>
-            <input
-              name="email"
-              type="email"
-              className="form-control form-control-lg mb-3"
-              required
-            />
+            <div className="mb-3">
+              <label className="form-label">Employee ID</label>
+              <input
+                name="employee_id"
+                className="form-control form-control-lg"
+                autoComplete="username"
+                required
+              />
+            </div>
+            <div className="mb-3">
+              <label className="form-label">Registered email address</label>
+              <input
+                name="email"
+                type="email"
+                className="form-control form-control-lg"
+                autoComplete="email"
+                required
+              />
+            </div>
             <FormSubmitButton
               className="btn btn-primary btn-lg w-100"
-              pendingLabel="Sending reset link…"
+              pendingLabel="Sending OTP…"
             >
-              Send reset link
+              Send verification OTP
             </FormSubmitButton>
           </form>
           <Link className="d-block text-center mt-3" href="/login">
