@@ -74,6 +74,14 @@ export async function transitionTask(fd: FormData) {
     });
     if (error) throw new Error(error.message);
   }
+  const automaticProgress = action === "approve" ? 100 : action === "complete" ? 90 : action === "start_wip" || action === "resume" ? 30 : null;
+  if (automaticProgress !== null) {
+    const { error: progressError } = await createAdminClient()
+      .from("tasks")
+      .update({ progress_percentage: automaticProgress, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (progressError) throw new Error("Task status changed, but progress could not be updated");
+  }
   const visibleStatus =
     action === "start_wip" || action === "resume"
       ? "Work in Progress"
@@ -91,6 +99,9 @@ export async function transitionTask(fd: FormData) {
       : `Task status changed to ${visibleStatus}. Remarks: ${remarks}`,
   ).catch(console.error);
   revalidatePath(`/tasks/${id}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/board");
+  revalidatePath("/tasks");
 }
 
 const checklistUpdate = z.object({
@@ -114,7 +125,18 @@ export async function toggleChecklistItem(value: z.infer<typeof checklistUpdate>
     completed_at: input.completed ? new Date().toISOString() : null,
   }).eq("id", input.itemId).eq("task_id", input.taskId);
   if (error) throw new Error(error.message);
+  const { data: checklist } = await admin
+    .from("task_checklist_items")
+    .select("completed")
+    .eq("task_id", input.taskId);
+  if (checklist?.length && ["in_progress", "on_hold", "rework_required", "reopened"].includes(task.status)) {
+    const completedItems = checklist.filter((item) => item.completed).length;
+    const progress = Math.min(85, 30 + Math.round((completedItems / checklist.length) * 55));
+    await admin.from("tasks").update({ progress_percentage: progress, updated_at: new Date().toISOString() }).eq("id", input.taskId);
+  }
   revalidatePath(`/tasks/${input.taskId}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/board");
 }
 
 export async function deleteTask(fd: FormData) {
