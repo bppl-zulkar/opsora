@@ -30,18 +30,13 @@ export default async function Task({
   if (!isAdmin) taskQuery = taskQuery.or(ownTaskFilter(userId));
   const { data: t } = await taskQuery.single();
   if (!t) notFound();
-  const [{ data: historyData }, { data: checklistData }] = await Promise.all([
+  const [{ data: historyData }, { data: checklistData }, { data: attachmentData }, { data: commentData }] = await Promise.all([
     s.from("task_status_history").select("*,actor:profiles(full_name)").eq("task_id", id).order("created_at", { ascending: false }),
     s.from("task_checklist_items").select("id,label,completed,completed_at").eq("task_id", id).order("position"),
+    s.from("task_attachments").select("id,file_name,mime_type,file_size,remarks,storage_path,created_at,uploader:profiles!task_attachments_uploaded_by_fkey(full_name)").eq("task_id", id).order("created_at", { ascending: false }),
+    s.from("task_comments").select("id,body,internal,created_at,author:profiles!task_comments_author_id_fkey(full_name)").eq("task_id", id).order("created_at", { ascending: false }),
   ]);
-  const history = (historyData ?? []).filter(
-    (event) => !["acknowledged", "accepted"].includes(event.new_status),
-  );
-  const { data: attachmentData } = await s
-    .from("task_attachments")
-    .select("id,file_name,mime_type,file_size,remarks,storage_path,created_at")
-    .eq("task_id", id)
-    .order("created_at", { ascending: false });
+  const history = historyData ?? [];
   const attachments = await Promise.all(
     (attachmentData ?? []).map(async (item) => {
       const { data } = await s.storage
@@ -51,6 +46,30 @@ export default async function Task({
     }),
   );
   const displayStatus = formatWorkStatus(t.status);
+  const reachedStatuses = new Set(history.map((event) => event.new_status));
+  const lifecycle = [
+    { label: "Assigned", detail: "Work assigned", reached: true, active: ["assigned"].includes(t.status) },
+    { label: "Acknowledged", detail: "Owner confirmed", reached: reachedStatuses.has("acknowledged") || !["assigned"].includes(t.status), active: ["acknowledged", "accepted"].includes(t.status) },
+    { label: "Work in progress", detail: "Execution underway", reached: ["in_progress", "on_hold", "pending_verification", "closed", "completed"].some((status) => reachedStatuses.has(status) || t.status === status), active: ["in_progress", "on_hold", "rework_required", "reopened"].includes(t.status) },
+    { label: "Submitted", detail: "Awaiting verification", reached: ["pending_verification", "closed", "completed"].some((status) => reachedStatuses.has(status) || t.status === status), active: t.status === "pending_verification" },
+    { label: "Verified", detail: "Creator approved", reached: ["closed", "completed"].includes(t.status), active: ["closed", "completed"].includes(t.status) },
+  ];
+  const timeline = [
+    ...history.map((event) => ({
+      id: `status-${event.id}`, kind: "status" as const, title: formatWorkStatus(event.new_status),
+      actor: event.actor?.full_name ?? "System", createdAt: event.created_at, remarks: event.remarks as string | null,
+    })),
+    ...attachments.map((item) => ({
+      id: `file-${item.id}`, kind: "file" as const, title: "Document or evidence uploaded",
+      actor: (item.uploader as unknown as { full_name?: string } | null)?.full_name ?? "Company User", createdAt: item.created_at,
+      remarks: item.remarks, file: item,
+    })),
+    ...(commentData ?? []).map((item) => ({
+      id: `comment-${item.id}`, kind: "comment" as const, title: item.internal ? "Internal discussion note" : "Discussion note",
+      actor: (item.author as unknown as { full_name?: string } | null)?.full_name ?? "Company User", createdAt: item.created_at,
+      remarks: item.body as string,
+    })),
+  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const wasOnHold = history.some((event) => event.new_status === "on_hold");
   const isOwner = t.primary_owner_id === userId;
   const canApprove = t.created_by === userId;
@@ -103,6 +122,20 @@ export default async function Task({
           )}
         </div>
       </div>
+      <section className="panel p-4 mb-3 task-lifecycle-card">
+        <div className="task-section-heading">
+          <div><span>Lifecycle</span><h2>Task journey</h2></div>
+          <strong>{t.progress_percentage}% complete</strong>
+        </div>
+        <div className="task-lifecycle-steps">
+          {lifecycle.map((stage, index) => (
+            <div className={`${stage.reached ? "is-reached" : ""}${stage.active ? " is-active" : ""}`} key={stage.label}>
+              <span>{stage.reached ? <i className="ri-check-line" /> : index + 1}</span>
+              <div><strong>{stage.label}</strong><small>{stage.detail}</small></div>
+            </div>
+          ))}
+        </div>
+      </section>
       <div className="row g-3">
         <div className="col-lg-8">
           <TaskChecklist taskId={id} initialItems={checklistData ?? []} canUpdate={isOwner} />
@@ -157,6 +190,34 @@ export default async function Task({
               </p>
             )}
           </section>
+          <section className="panel p-4 task-complete-timeline">
+            <div className="task-section-heading">
+              <div><span>Complete history</span><h2>Updates, remarks and documents</h2></div>
+              <strong>{timeline.length} updates</strong>
+            </div>
+            <div className="task-timeline-list">
+              {timeline.map((event) => (
+                <article className={`task-timeline-event event-${event.kind}`} key={event.id}>
+                  <span className="task-timeline-icon"><i className={event.kind === "file" ? "ri-attachment-2" : event.kind === "comment" ? "ri-chat-3-line" : "ri-refresh-line"} /></span>
+                  <div className="task-timeline-content">
+                    <div className="task-timeline-title"><strong>{event.title}</strong><time>{formatIST(event.createdAt)}</time></div>
+                    <small>{event.actor}</small>
+                    {event.remarks && <p>{event.remarks}</p>}
+                    {event.kind === "file" && event.file && (
+                      <div className="task-timeline-file">
+                        {event.file.signedUrl && event.file.mime_type?.startsWith("image/") ? (
+                          <Image src={event.file.signedUrl} alt={event.file.file_name} width={90} height={68} className="evidence-thumbnail" unoptimized />
+                        ) : <span className="evidence-file-icon"><i className="ri-file-line" /></span>}
+                        <div><strong>{event.file.file_name}</strong><small>{(event.file.file_size / 1024 / 1024).toFixed(2)} MB</small></div>
+                        {event.file.signedUrl && <a className="btn btn-sm btn-outline-primary" href={event.file.signedUrl} target="_blank" rel="noreferrer">View document</a>}
+                      </div>
+                    )}
+                  </div>
+                </article>
+              ))}
+              {!timeline.length && <p className="text-secondary mb-0">No updates have been recorded yet.</p>}
+            </div>
+          </section>
           <section className="panel p-4 mb-3">
             <h2 className="h5">Instructions</h2>
             <p className="text-secondary" style={{ whiteSpace: "pre-wrap" }}>
@@ -191,20 +252,6 @@ export default async function Task({
               <dt>Progress</dt>
               <dd>{t.progress_percentage}%</dd>
             </dl>
-          </section>
-          <section className="panel p-4">
-            <h2 className="h5">Activity timeline</h2>
-            {history.map((h) => (
-              <div className="border-start ps-3 pb-3" key={h.id}>
-                <strong className="text-capitalize">
-                  {formatWorkStatus(h.new_status)}
-                </strong>
-                <small className="d-block text-secondary">
-                  {h.actor?.full_name} · {formatIST(h.created_at)}
-                </small>
-                {h.remarks && <div>{h.remarks}</div>}
-              </div>
-            ))}
           </section>
         </div>
       </div>
