@@ -9,7 +9,7 @@ import { AccountMenu } from "./account-menu";
 import { PushSubscriptionSync } from "./push-subscription-sync";
 import { WorkspaceNavigation } from "./workspace-navigation";
 import { GlobalSearch } from "./global-search";
-import { VoiceTaskAssistant } from "./voice-task-assistant";
+import { VoiceTaskAssistantLoader } from "./voice-task-assistant-loader";
 const primaryNav = [
   ["/dashboard", "ri-dashboard-2-line", "Dashboard"],
   ["/tasks", "ri-task-line", "Tasks"],
@@ -93,7 +93,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className={`shell workspace-bg-${background}`}>
       <PushSubscriptionSync />
-      <VoiceTaskAssistant userName={p?.full_name ?? user.email ?? "there"} />
+      <VoiceTaskAssistantLoader userName={p?.full_name ?? user.email ?? "there"} />
       <aside className="sidebar" id="primary-sidebar">
         <div className="sidebar-brand">
           <Logo src={sidebarLogo} name={companyName} />

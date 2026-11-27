@@ -24,6 +24,8 @@ type SpeechRecognitionLike = {
   stop: () => void;
 };
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+const taskDateFormatter = new Intl.DateTimeFormat("en-US", { dateStyle: "medium" });
+const updateDateFormatter = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" });
 
 export function VoiceTaskAssistant({ userName }: { userName: string }) {
   const [open, setOpen] = useState(false);
@@ -39,6 +41,10 @@ export function VoiceTaskAssistant({ userName }: { userName: string }) {
   const [awaitingWakeWord, setAwaitingWakeWord] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState("");
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const listeningRef = useRef(false);
+  const restartTimerRef = useRef<number | null>(null);
+  const speechWatchdogRef = useRef<number | null>(null);
+  const startListeningRef = useRef<() => void>(() => undefined);
   const voiceModeRef = useRef(false);
   const speakingRef = useRef(false);
   const preferredVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
@@ -64,10 +70,14 @@ export function VoiceTaskAssistant({ userName }: { userName: string }) {
     const stopAudio = () => {
       recognitionRef.current?.stop();
       if (document.visibilityState === "hidden") {
+        listeningRef.current = false;
+        if (restartTimerRef.current) window.clearTimeout(restartTimerRef.current);
         speechSequenceRef.current += 1;
         window.speechSynthesis?.cancel();
         setListening(false);
         setSpeaking(false);
+      } else if (voiceModeRef.current) {
+        restartTimerRef.current = window.setTimeout(() => startListeningRef.current(), 350);
       }
     };
     selectVoice();
@@ -78,6 +88,8 @@ export function VoiceTaskAssistant({ userName }: { userName: string }) {
       voiceModeRef.current = false;
       speakingRef.current = false;
       speechSequenceRef.current += 1;
+      if (restartTimerRef.current) window.clearTimeout(restartTimerRef.current);
+      if (speechWatchdogRef.current) window.clearTimeout(speechWatchdogRef.current);
       recognitionRef.current?.stop();
       window.speechSynthesis?.cancel();
       window.speechSynthesis?.removeEventListener?.("voiceschanged", selectVoice);
@@ -131,14 +143,27 @@ export function VoiceTaskAssistant({ userName }: { userName: string }) {
       utterance.rate = .96;
       utterance.pitch = 1.08;
       utterance.volume = 1;
-      utterance.onend = () => playChunk(index + 1);
+      let chunkFinished = false;
+      const completeChunk = () => {
+        if (chunkFinished || sequence !== speechSequenceRef.current) return;
+        chunkFinished = true;
+        if (speechWatchdogRef.current) window.clearTimeout(speechWatchdogRef.current);
+        playChunk(index + 1);
+      };
+      utterance.onend = completeChunk;
       utterance.onerror = (event) => {
-        if (sequence !== speechSequenceRef.current || event.error === "canceled" || event.error === "interrupted") return;
+        if (chunkFinished || sequence !== speechSequenceRef.current) return;
+        if (event.error === "canceled" || event.error === "interrupted") { completeChunk(); return; }
         setMessages((current) => [...current, { role: "assistant", text: "Audio playback stopped. The complete written answer is available above." }]);
         finish();
       };
       window.speechSynthesis.resume();
       window.speechSynthesis.speak(utterance);
+      speechWatchdogRef.current = window.setTimeout(() => {
+        if (chunkFinished || sequence !== speechSequenceRef.current) return;
+        window.speechSynthesis.cancel();
+        completeChunk();
+      }, Math.min(15000, Math.max(5000, chunks[index].length * 90)));
     };
     try {
       playChunk(0);
@@ -184,7 +209,8 @@ export function VoiceTaskAssistant({ userName }: { userName: string }) {
   }
 
   function startListening() {
-    if (busyRef.current || !voiceModeRef.current || document.visibilityState !== "visible") return;
+    if (busyRef.current || !voiceModeRef.current || listeningRef.current || speakingRef.current || document.visibilityState !== "visible") return;
+    if (restartTimerRef.current) { window.clearTimeout(restartTimerRef.current); restartTimerRef.current = null; }
     setLiveTranscript("");
     const browserWindow = window as typeof window & { SpeechRecognition?: SpeechRecognitionConstructor; webkitSpeechRecognition?: SpeechRecognitionConstructor };
     const Recognition = browserWindow.SpeechRecognition ?? browserWindow.webkitSpeechRecognition;
@@ -249,36 +275,48 @@ export function VoiceTaskAssistant({ userName }: { userName: string }) {
       }
     };
     recognition.onend = () => {
+      listeningRef.current = false;
+      recognitionRef.current = null;
       setListening(false);
       if (!transcriptHandled && latestTranscript && voiceModeRef.current) {
         transcriptHandled = true;
         handleTranscript(latestTranscript);
       }
       if (voiceModeRef.current && !busyRef.current && !speakingRef.current && !window.speechSynthesis?.speaking) {
-        window.setTimeout(() => startListening(), 250);
+        restartTimerRef.current = window.setTimeout(() => startListening(), 350);
       }
     };
     recognition.onerror = (event) => {
+      listeningRef.current = false;
       setListening(false);
       if (event.error === "aborted") return;
       if (event.error === "no-speech") return;
-      if (recognitionErrorReportedRef.current) return;
+      const fatal = event.error === "not-allowed" || event.error === "service-not-allowed" || event.error === "audio-capture";
+      if (fatal) {
+        voiceModeRef.current = false;
+        speakingRef.current = false;
+        voiceSessionGreetedRef.current = false;
+        wakeWordModeRef.current = false;
+        setAwaitingWakeWord(false);
+      }
+      if (recognitionErrorReportedRef.current && !fatal) return;
       recognitionErrorReportedRef.current = true;
-      voiceModeRef.current = false;
-      speakingRef.current = false;
-      voiceSessionGreetedRef.current = false;
-      wakeWordModeRef.current = false;
-      setAwaitingWakeWord(false);
       const message = event.error === "not-allowed" || event.error === "service-not-allowed"
         ? "Microphone access is blocked. Allow microphone access in your browser’s site settings, then start Live commands again."
         : event.error === "audio-capture"
           ? "I couldn’t access a microphone. Connect or enable a microphone, then try again."
           : `Voice recognition stopped (${event.error}). Please try the microphone again or type your question.`;
       setMessages((current) => [...current, { role: "assistant", text: message }]);
+      if (!fatal && voiceModeRef.current) restartTimerRef.current = window.setTimeout(() => {
+        recognitionErrorReportedRef.current = false;
+        startListening();
+      }, 900);
     };
     recognitionRef.current = recognition;
+    listeningRef.current = true;
     setListening(true);
     try { recognition.start(); } catch {
+      listeningRef.current = false;
       setListening(false);
       voiceModeRef.current = false;
       speakingRef.current = false;
@@ -289,9 +327,14 @@ export function VoiceTaskAssistant({ userName }: { userName: string }) {
     }
   }
 
+  useEffect(() => {
+    startListeningRef.current = startListening;
+  });
+
   function toggleVoice() {
     if (listening) {
       recognitionRef.current?.stop();
+      listeningRef.current = false;
       setListening(false);
       voiceModeRef.current = false;
       voiceSessionGreetedRef.current = false;
@@ -326,6 +369,9 @@ export function VoiceTaskAssistant({ userName }: { userName: string }) {
 
   function closeAssistant() {
     recognitionRef.current?.stop();
+    listeningRef.current = false;
+    if (restartTimerRef.current) window.clearTimeout(restartTimerRef.current);
+    if (speechWatchdogRef.current) window.clearTimeout(speechWatchdogRef.current);
     speechSequenceRef.current += 1;
     window.speechSynthesis?.cancel();
     voiceModeRef.current = false;
@@ -376,7 +422,7 @@ export function VoiceTaskAssistant({ userName }: { userName: string }) {
                         <div className="assistant-task-meta">
                           <span><i className="ri-user-add-line" /> Created by <strong>{task.creator}</strong></span>
                           <span><i className="ri-user-follow-line" /> Owner <strong>{task.owner}</strong></span>
-                          <span><i className="ri-calendar-line" /> Due <strong>{new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(new Date(task.deadline))}</strong></span>
+                          <span><i className="ri-calendar-line" /> Due <strong>{taskDateFormatter.format(new Date(task.deadline))}</strong></span>
                           <span><i className="ri-checkbox-circle-line" /> <strong>{task.status}</strong></span>
                         </div>
                         <div className="assistant-task-progress"><span><b style={{ width: `${Math.max(0, Math.min(100, task.progress ?? 0))}%` }} /></span><small>{task.progress ?? 0}%</small></div>
@@ -385,7 +431,7 @@ export function VoiceTaskAssistant({ userName }: { userName: string }) {
                             <span>Latest update</span>
                             <strong>{task.latestUpdate.status}</strong>
                             <p>{task.latestUpdate.remarks || `Updated by ${task.latestUpdate.actor}`}</p>
-                            <small>{task.latestUpdate.actor} · {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(task.latestUpdate.createdAt))}</small>
+                            <small>{task.latestUpdate.actor} · {updateDateFormatter.format(new Date(task.latestUpdate.createdAt))}</small>
                           </div>
                         )}
                         <Link className="assistant-task-open" href={`/tasks/${task.id}`} onClick={() => setOpen(false)}>View complete task <i className="ri-arrow-right-line" /></Link>
