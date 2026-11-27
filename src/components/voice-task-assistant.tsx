@@ -41,6 +41,9 @@ export function VoiceTaskAssistant({ userName }: { userName: string }) {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const voiceModeRef = useRef(false);
   const speakingRef = useRef(false);
+  const preferredVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
+  const speechSequenceRef = useRef(0);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const voiceSessionGreetedRef = useRef(false);
   const recognitionErrorReportedRef = useRef(false);
   const wakeWordModeRef = useRef(false);
@@ -49,47 +52,96 @@ export function VoiceTaskAssistant({ userName }: { userName: string }) {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { messagesRef.current = messages; endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, liveTranscript]);
-  useEffect(() => () => {
-    voiceModeRef.current = false;
-    speakingRef.current = false;
-    recognitionRef.current?.stop();
-    window.speechSynthesis?.cancel();
+  useEffect(() => {
+    const selectVoice = () => {
+      if (!("speechSynthesis" in window)) return;
+      const voices = window.speechSynthesis.getVoices();
+      const preferredNames = ["Samantha", "Jenny", "Aria", "Ava", "Zira", "Susan", "Victoria", "Google US English", "Microsoft Jenny", "Microsoft Aria"];
+      preferredVoiceRef.current = preferredNames
+        .map((name) => voices.find((voice) => voice.lang.toLowerCase().startsWith("en-us") && voice.name.toLowerCase().includes(name.toLowerCase())))
+        .find(Boolean) ?? voices.find((voice) => voice.lang.toLowerCase().startsWith("en-us")) ?? voices.find((voice) => voice.lang.toLowerCase().startsWith("en")) ?? null;
+    };
+    const stopAudio = () => {
+      recognitionRef.current?.stop();
+      if (document.visibilityState === "hidden") {
+        speechSequenceRef.current += 1;
+        window.speechSynthesis?.cancel();
+        setListening(false);
+        setSpeaking(false);
+      }
+    };
+    selectVoice();
+    window.speechSynthesis?.addEventListener?.("voiceschanged", selectVoice);
+    document.addEventListener("visibilitychange", stopAudio);
+    window.addEventListener("pagehide", stopAudio);
+    return () => {
+      voiceModeRef.current = false;
+      speakingRef.current = false;
+      speechSequenceRef.current += 1;
+      recognitionRef.current?.stop();
+      window.speechSynthesis?.cancel();
+      window.speechSynthesis?.removeEventListener?.("voiceschanged", selectVoice);
+      document.removeEventListener("visibilitychange", stopAudio);
+      window.removeEventListener("pagehide", stopAudio);
+    };
   }, []);
+
+  function speechChunks(text: string) {
+    const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) ?? [text];
+    const chunks: string[] = [];
+    for (const sentence of sentences) {
+      const clean = sentence.trim();
+      if (!clean) continue;
+      if (clean.length <= 180) { chunks.push(clean); continue; }
+      const words = clean.split(/\s+/);
+      let chunk = "";
+      for (const word of words) {
+        if (`${chunk} ${word}`.trim().length > 180 && chunk) { chunks.push(chunk); chunk = word; }
+        else chunk = `${chunk} ${word}`.trim();
+      }
+      if (chunk) chunks.push(chunk);
+    }
+    return chunks;
+  }
 
   function speak(text: string) {
     if (!("speechSynthesis" in window)) {
       setMessages((current) => [...current, { role: "assistant", text: "Audio replies are not available in this browser, but you can read my written reply above." }]);
       return false;
     }
+    const sequence = ++speechSequenceRef.current;
     window.speechSynthesis.cancel();
-    window.speechSynthesis.resume();
     speakingRef.current = true;
-    setSpeaking(false);
-    const utterance = new SpeechSynthesisUtterance(text);
-    const voices = window.speechSynthesis.getVoices();
-    const preferredNames = ["Samantha", "Jenny", "Aria", "Ava", "Zira", "Susan", "Victoria", "Google US English"];
-    const voice = preferredNames.map((name) => voices.find((item) => item.lang.startsWith("en-US") && item.name.includes(name))).find(Boolean)
-      ?? voices.find((item) => item.lang.startsWith("en-US"));
-    if (voice) utterance.voice = voice;
-    utterance.lang = "en-US";
-    utterance.rate = .96;
-    utterance.pitch = 1.08;
-    utterance.volume = 1;
-    utterance.onstart = () => setSpeaking(true);
-    utterance.onend = () => {
+    setSpeaking(true);
+    const chunks = speechChunks(text);
+    const finish = () => {
+      if (sequence !== speechSequenceRef.current) return;
       speakingRef.current = false;
       setSpeaking(false);
-      if (voiceModeRef.current) startListening();
+      utteranceRef.current = null;
+      if (voiceModeRef.current && document.visibilityState === "visible") window.setTimeout(() => startListening(), 180);
     };
-    utterance.onerror = (event) => {
-      speakingRef.current = false;
-      setSpeaking(false);
-      if (!voiceModeRef.current || event.error === "canceled" || event.error === "interrupted") return;
-      setMessages((current) => [...current, { role: "assistant", text: "I couldn’t play the audio reply. The written answer is still available above." }]);
-      window.setTimeout(() => startListening(), 250);
+    const playChunk = (index: number) => {
+      if (sequence !== speechSequenceRef.current) return;
+      if (index >= chunks.length) { finish(); return; }
+      const utterance = new SpeechSynthesisUtterance(chunks[index]);
+      utteranceRef.current = utterance;
+      if (preferredVoiceRef.current) utterance.voice = preferredVoiceRef.current;
+      utterance.lang = "en-US";
+      utterance.rate = .96;
+      utterance.pitch = 1.08;
+      utterance.volume = 1;
+      utterance.onend = () => playChunk(index + 1);
+      utterance.onerror = (event) => {
+        if (sequence !== speechSequenceRef.current || event.error === "canceled" || event.error === "interrupted") return;
+        setMessages((current) => [...current, { role: "assistant", text: "Audio playback stopped. The complete written answer is available above." }]);
+        finish();
+      };
+      window.speechSynthesis.resume();
+      window.speechSynthesis.speak(utterance);
     };
     try {
-      window.speechSynthesis.speak(utterance);
+      playChunk(0);
     } catch {
       speakingRef.current = false;
       setSpeaking(false);
@@ -132,7 +184,7 @@ export function VoiceTaskAssistant({ userName }: { userName: string }) {
   }
 
   function startListening() {
-    if (busyRef.current || !voiceModeRef.current) return;
+    if (busyRef.current || !voiceModeRef.current || document.visibilityState !== "visible") return;
     setLiveTranscript("");
     const browserWindow = window as typeof window & { SpeechRecognition?: SpeechRecognitionConstructor; webkitSpeechRecognition?: SpeechRecognitionConstructor };
     const Recognition = browserWindow.SpeechRecognition ?? browserWindow.webkitSpeechRecognition;
@@ -144,6 +196,7 @@ export function VoiceTaskAssistant({ userName }: { userName: string }) {
       setAwaitingWakeWord(false);
       return;
     }
+    speechSequenceRef.current += 1;
     window.speechSynthesis?.cancel();
     speakingRef.current = false;
     setSpeaking(false);
@@ -252,11 +305,10 @@ export function VoiceTaskAssistant({ userName }: { userName: string }) {
     wakeWordModeRef.current = fullScreen;
     setAwaitingWakeWord(fullScreen);
     window.speechSynthesis?.resume();
-    startListening();
     if (!voiceSessionGreetedRef.current) {
       voiceSessionGreetedRef.current = true;
       if (!speak(`Hi ${userName}. I’m Opsora. I can see you’re signed in as ${userName}. What would you like to know about your tasks?`)) startListening();
-    }
+    } else startListening();
   }
 
   function openLiveCommands() {
@@ -268,13 +320,13 @@ export function VoiceTaskAssistant({ userName }: { userName: string }) {
     wakeWordModeRef.current = true;
     setAwaitingWakeWord(true);
     window.speechSynthesis?.resume();
-    startListening();
     voiceSessionGreetedRef.current = true;
     if (!speak(`Hi ${userName}. I’m Opsora. I can see you’re signed in as ${userName}. What would you like to know about your tasks?`)) startListening();
   }
 
   function closeAssistant() {
     recognitionRef.current?.stop();
+    speechSequenceRef.current += 1;
     window.speechSynthesis?.cancel();
     voiceModeRef.current = false;
     speakingRef.current = false;
@@ -356,7 +408,7 @@ export function VoiceTaskAssistant({ userName }: { userName: string }) {
           </div>
           <form onSubmit={submit} className="voice-assistant-input">
             <button type="button" className={listening ? "is-listening" : ""} onClick={toggleVoice} aria-label={listening ? "Stop listening" : "Ask with microphone"}><i className={listening ? "ri-stop-circle-line" : "ri-mic-line"} /></button>
-            <input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask about tasks in English…" aria-label="Message assistant" />
+            <input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask about tasks in English…" aria-label="Message assistant" autoComplete="off" enterKeyHint="send" />
             <button type="submit" disabled={busy || !input.trim()} aria-label="Send message"><i className="ri-send-plane-2-fill" /></button>
           </form>
           <small className="assistant-privacy"><i className="ri-shield-check-line" /> Answers follow your existing task permissions</small>

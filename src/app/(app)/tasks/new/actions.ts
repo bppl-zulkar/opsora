@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { dispatchTaskEvent } from "@/lib/communications";
+import { createAdminClient } from "@/lib/supabase/admin";
 const input = z.object({
   title: z.string().min(3).max(180),
   description: z.string().min(3).max(10000),
@@ -26,6 +27,9 @@ export async function createTask(fd: FormData) {
     .eq("id", user.id)
     .single();
   if (!p) throw new Error("Profile not configured");
+  const checklist = fd.getAll("checklist_item").map(String).map((item) => item.trim()).filter(Boolean);
+  if (checklist.length > 30 || checklist.some((item) => item.length < 2 || item.length > 240))
+    throw new Error("Checklist items must contain 2 to 240 characters, with no more than 30 items");
   let durationMinutes = parsed.data.hours * 60;
   let sla: null | {
     id: string;
@@ -68,6 +72,15 @@ export async function createTask(fd: FormData) {
     .select("id")
     .single();
   if (error) throw new Error(error.message);
+  if (checklist.length) {
+    const { error: checklistError } = await createAdminClient().from("task_checklist_items").insert(
+      checklist.map((label, position) => ({ organization_id: p.organization_id, task_id: data.id, label, position })),
+    );
+    if (checklistError) {
+      await createAdminClient().from("tasks").delete().eq("id", data.id);
+      throw new Error(`Unable to save task checklist: ${checklistError.message}`);
+    }
+  }
   await dispatchTaskEvent(
     data.id,
     user.id,

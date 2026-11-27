@@ -6,6 +6,7 @@ import { ReportDownloadButton } from "@/components/report-download-button";
 import Image from "next/image";
 import { deleteTask } from "./actions";
 import { FormSubmitButton } from "@/components/form-submit-button";
+import { TaskChecklist } from "@/components/task-checklist";
 export default async function Task({
   params,
 }: {
@@ -29,11 +30,10 @@ export default async function Task({
   if (!isAdmin) taskQuery = taskQuery.or(ownTaskFilter(userId));
   const { data: t } = await taskQuery.single();
   if (!t) notFound();
-  const { data: historyData } = await s
-    .from("task_status_history")
-    .select("*,actor:profiles(full_name)")
-    .eq("task_id", id)
-    .order("created_at", { ascending: false });
+  const [{ data: historyData }, { data: checklistData }] = await Promise.all([
+    s.from("task_status_history").select("*,actor:profiles(full_name)").eq("task_id", id).order("created_at", { ascending: false }),
+    s.from("task_checklist_items").select("id,label,completed,completed_at").eq("task_id", id).order("position"),
+  ]);
   const history = (historyData ?? []).filter(
     (event) => !["acknowledged", "accepted"].includes(event.new_status),
   );
@@ -105,6 +105,7 @@ export default async function Task({
       </div>
       <div className="row g-3">
         <div className="col-lg-8">
+          <TaskChecklist taskId={id} initialItems={checklistData ?? []} canUpdate={isOwner} />
           {nextActions.length > 0 && (
             <TaskUpdateForm taskId={id} nextActions={nextActions} />
           )}

@@ -43,6 +43,15 @@ export async function transitionTask(fd: FormData) {
       task.status === "pending_verification" &&
       approvalAction);
   if (!allowed) throw new Error("This work update is no longer available");
+  if (action === "complete") {
+    const { count, error: checklistError } = await createAdminClient()
+      .from("task_checklist_items")
+      .select("id", { count: "exact", head: true })
+      .eq("task_id", id)
+      .eq("completed", false);
+    if (checklistError) throw new Error("Unable to verify the task checklist");
+    if (count) throw new Error(`Complete all ${count} remaining checklist item${count === 1 ? "" : "s"} before submitting the task`);
+  }
   const transitions =
     action === "start_wip"
       ? task.status === "assigned"
@@ -82,6 +91,30 @@ export async function transitionTask(fd: FormData) {
       : `Task status changed to ${visibleStatus}. Remarks: ${remarks}`,
   ).catch(console.error);
   revalidatePath(`/tasks/${id}`);
+}
+
+const checklistUpdate = z.object({
+  taskId: z.string().uuid(),
+  itemId: z.string().uuid(),
+  completed: z.boolean(),
+});
+
+export async function toggleChecklistItem(value: z.infer<typeof checklistUpdate>) {
+  const input = checklistUpdate.parse(value);
+  const s = await createClient();
+  const { data: { user } } = await s.auth.getUser();
+  if (!user) throw new Error("Authentication required");
+  const admin = createAdminClient();
+  const { data: task } = await admin.from("tasks").select("id,primary_owner_id,status").eq("id", input.taskId).is("deleted_at", null).maybeSingle();
+  if (!task || task.primary_owner_id !== user.id) throw new Error("Only the assigned owner can update this checklist");
+  if (["closed", "cancelled"].includes(task.status)) throw new Error("This task can no longer be changed");
+  const { error } = await admin.from("task_checklist_items").update({
+    completed: input.completed,
+    completed_by: input.completed ? user.id : null,
+    completed_at: input.completed ? new Date().toISOString() : null,
+  }).eq("id", input.itemId).eq("task_id", input.taskId);
+  if (error) throw new Error(error.message);
+  revalidatePath(`/tasks/${input.taskId}`);
 }
 
 export async function deleteTask(fd: FormData) {

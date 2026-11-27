@@ -84,7 +84,7 @@ export async function changeOwnPassword(fd: FormData) {
   if (error) {
     redirect(`/profile?error=${encodeURIComponent(error.message)}#security`);
   }
-  await client
+  await createAdminClient()
     .from("profiles")
     .update({
       force_password_change: false,

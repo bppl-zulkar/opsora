@@ -1075,6 +1075,33 @@ body {
 .voice-assistant-input .is-listening { color:#fff; background:#e3425c; animation:assistant-listen 1s infinite alternate; }
 @keyframes assistant-listen { to{box-shadow:0 0 0 6px rgba(227,66,92,.14)} }
 .assistant-privacy { padding:0 1rem .8rem; color:var(--muted); text-align:center; font-size:.65rem; }
+
+/* Task checklists */
+.task-checklist-builder { padding:1.15rem; border:1px solid var(--line); border-radius:16px; background:var(--surface-2); }
+.task-checklist-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:.85rem; }
+.task-checklist-heading h2 { margin:0; font-size:1rem; }
+.task-checklist-heading h2 span { margin-left:.35rem; padding:.18rem .45rem; border-radius:999px; color:var(--brand); background:rgba(var(--brand-rgb),.09); font-size:.62rem; font-weight:700; vertical-align:middle; }
+.task-checklist-heading p { margin:.25rem 0 0; color:var(--muted); font-size:.8rem; }
+.task-checklist-inputs { display:grid; gap:.55rem; }
+.task-checklist-input { display:grid; grid-template-columns:30px minmax(0,1fr) 38px; align-items:center; gap:.5rem; }
+.task-checklist-input > span { display:grid; place-items:center; width:28px; height:28px; border-radius:9px; color:var(--brand); background:rgba(var(--brand-rgb),.09); font-size:.72rem; font-weight:750; }
+.task-checklist-input > button { display:grid; place-items:center; width:36px; height:36px; border:0; border-radius:10px; color:#c33b51; background:#fff0f2; }
+.task-checklist-input > button:disabled { opacity:.35; }
+.task-checklist-builder > small { display:block; margin-top:.65rem; color:var(--muted); font-size:.7rem; }
+.task-checklist-summary { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+.task-checklist-summary span { color:var(--brand); font-size:.68rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; }
+.task-checklist-summary h2 { margin:.15rem 0 0; font-size:1.05rem; }
+.task-checklist-summary > strong { display:grid; place-items:center; width:52px; height:52px; border-radius:50%; color:var(--brand); background:rgba(var(--brand-rgb),.09); font-size:.8rem; }
+.task-checklist-progress { height:7px; overflow:hidden; margin:.85rem 0 1rem; border-radius:999px; background:#ece9f2; }
+.task-checklist-progress span { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#7137f4,#376ae9); transition:width .25s ease; }
+.task-checklist-items { display:grid; gap:.55rem; }
+.task-checklist-items label { display:flex; align-items:center; gap:.7rem; min-height:46px; padding:.65rem .75rem; border:1px solid var(--line); border-radius:12px; background:var(--surface-2); cursor:pointer; }
+.task-checklist-items label > input { position:absolute; opacity:0; pointer-events:none; }
+.task-checkmark { display:grid; place-items:center; width:24px; height:24px; flex:0 0 auto; border:2px solid #c4bfce; border-radius:7px; color:transparent; background:#fff; transition:.18s ease; }
+.task-checklist-items label.is-complete .task-checkmark { border-color:var(--brand); color:#fff; background:var(--brand); }
+.task-checklist-items label.is-complete > span:nth-of-type(2) { color:var(--muted); text-decoration:line-through; }
+.task-checklist-spinner { margin-left:auto; color:var(--brand); animation:spin .7s linear infinite; }
+@keyframes spin { to{transform:rotate(360deg)} }
 @media (max-width: 767px) {
   .voice-assistant { right:.75rem; bottom:calc(76px + env(safe-area-inset-bottom)); }
   .voice-assistant-panel { width:calc(100vw - 1.5rem); height:min(560px,calc(100dvh - 10rem)); border-radius:20px; }
@@ -1085,6 +1112,11 @@ body {
   .voice-assistant.is-fullscreen { padding:0; }
   .voice-assistant.is-fullscreen .voice-assistant-panel { width:100%; height:100dvh; border:0; border-radius:0; }
   .voice-assistant.is-fullscreen .assistant-task-results { grid-template-columns:1fr; }
+  .voice-assistant-input input { font-size:16px; }
+  .voice-assistant-input button,.voice-assistant-panel header button { min-width:44px; min-height:44px; }
+  .assistant-suggestions button { min-height:40px; }
+  .task-checklist-heading { flex-direction:column; }
+  .task-checklist-heading .btn { width:100%; }
 }
 .nav-section {
   font-size: 0.68rem;

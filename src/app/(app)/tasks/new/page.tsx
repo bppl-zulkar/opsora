@@ -1,6 +1,7 @@
 import { createTask } from "./actions";
 import { createClient } from "@/lib/supabase/server";
 import { FormSubmitButton } from "@/components/form-submit-button";
+import { ChecklistBuilder } from "@/components/checklist-builder";
 export default async function NewTask() {
   const s = await createClient();
   const { data } = await s
@@ -106,6 +107,9 @@ export default async function NewTask() {
             <label className="form-check-label">
               Completion evidence required
             </label>
+          </div>
+          <div className="col-12">
+            <ChecklistBuilder />
           </div>
           <div className="col-12">
             <FormSubmitButton pendingLabel="Assigning task…">
